@@ -97,8 +97,8 @@ Compared with the Eglantine it started from:
 | Donkey Kong Bananza | 30, 15-25 in heavy areas | 30 in lighter areas |
 | Mario Kart World | 30-40 | lots of off-track asset glitches |
 | Mario Tennis Fever | 60 | runs flawlessly |
-| Yoshi and the Mysterious Book | | gameplay renders a black screen |
-| Super Mario Bros. Wonder | 60 | runs flawlessly |
+| Yoshi and the Mysterious Book | | first level renders correctly and movement tested; full game not validated |
+| Super Mario Bros. Wonder | 60 target | custom FPS targets; Overworld cache churn reduced, some dips remain |
 | Star Fox | 30 | crashes very quickly |
 | Splatoon Raiders | 30 | in gameplay |
 | Pokémon Pokopia | 60 | in gameplay |
