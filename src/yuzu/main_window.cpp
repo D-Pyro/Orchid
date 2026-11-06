@@ -3449,10 +3449,26 @@ void MainWindow::OnOpenUserHandbook() {
 
 void MainWindow::OnReportCrash() {
     const auto log_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir);
-    auto log_path = log_dir / LOG_FILE;
+    Common::Log::Flush();
+    auto log_path = Common::Log::GetLogFilePath();
     if (!game_booted) {
-        // The run that crashed was renamed to .old.txt when this one started.
-        log_path += ".old.txt";
+        // Game logs survive restarts. Offer the most recently written game session.
+        log_path = log_dir / (std::string{LOG_FILE} + ".old.txt");
+        std::filesystem::file_time_type latest = std::filesystem::file_time_type::min();
+        std::error_code ec;
+        for (std::filesystem::directory_iterator it(log_dir, ec), end;
+             !ec && it != end; it.increment(ec)) {
+            const auto filename = it->path().filename().string();
+            if (!filename.starts_with("orchid_") || filename == LOG_FILE ||
+                filename.ends_with(".old.txt") || it->path().extension() != ".txt") {
+                continue;
+            }
+            const auto modified = it->last_write_time(ec);
+            if (!ec && modified > latest) {
+                latest = modified;
+                log_path = it->path();
+            }
+        }
     }
     QFile file(QString::fromStdString(Common::FS::PathToUTF8String(log_path)));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
