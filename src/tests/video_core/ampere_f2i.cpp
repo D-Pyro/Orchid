@@ -746,4 +746,109 @@ TEST_CASE("Ampere FRND lowers a constant-buffer source", "[video_core][ampere]")
     code[0].words[1] = (0x11U << 6) | (3U << 22); // unaligned offset
     REQUIRE_FALSE(static_cast<bool>(LowerToMaxwell(code)));
 }
+
+TEST_CASE("Ampere Yoshi half FRND preserves rounding and half formats",
+          "[video_core][ampere][yoshi_frnd]") {
+    // Captured in the texture-history program after its handle constructor and I2F.F16.
+    const Instruction exit{{0x0000794d, 0, 0x03800000, 0}};
+    for (const u32 round : {0U, 1U, 2U, 3U}) {
+        for (const u32 predicate : {1U, 7U, 9U}) {
+            std::array<Instruction, 2> code{{
+                {{0x002a0307U | (predicate << 12), 0x13, 0x00100800U | (round << 14),
+                  0x000e2200}},
+                exit,
+            }};
+            const auto lowered = LowerToMaxwell(code);
+            REQUIRE(lowered);
+            REQUIRE(lowered.instructions.size() == 2);
+            const u64 word = lowered.instructions.front();
+            REQUIRE(((word >> 8) & 3) == 1); // F16 destination
+            REQUIRE(((word >> 10) & 3) == 1); // F16 source
+            REQUIRE(((word >> 20) & 255) == 0x13);
+            REQUIRE(((word >> 39) & 15) == 8 + round);
+            REQUIRE(((word >> 16) & 15) == predicate);
+            code[0].words[2] ^= 3U << 20; // F32 source cannot use integral F16 rounding
+            REQUIRE_FALSE(LowerToMaxwell(code));
+            code[0].words[2] = 0x00100800U | (1U << 17); // unproved half selector
+            REQUIRE_FALSE(LowerToMaxwell(code));
+            code[0].words[2] = 0x00100800U;
+            for (const u32 half_selector : {1U, 2U, 3U}) {
+                code[0].words[1] = 0x13U | (half_selector << 28);
+                REQUIRE_FALSE(LowerToMaxwell(code));
+            }
+        }
+    }
+}
+
+TEST_CASE("Ampere Yoshi half F2I preserves all integral rounding modes",
+          "[video_core][ampere][yoshi_frnd]") {
+    const Instruction exit{{0x0000794d, 0, 0x03800000, 0}};
+    for (const u32 round : {0U, 1U, 2U, 3U}) {
+        for (const bool high : {false, true}) {
+            std::array<Instruction, 2> code{{
+                {{0x00197305, 0x13U | (u32{high} << 28),
+                  0x00103100U | (round << 14), 0x0000a200}},
+                exit,
+            }};
+            const auto lowered = LowerToMaxwell(code);
+            REQUIRE(lowered);
+            const auto conversion = std::ranges::find_if(lowered.instructions, [](u64 word) {
+                return word >> 52 == 0x5cb && ((word >> 10) & 3) == 2;
+            });
+            REQUIRE(conversion != lowered.instructions.end());
+            REQUIRE(((*conversion >> 39) & 3) == round);
+            REQUIRE(((*conversion >> 12) & 1) == 1); // signed result
+            REQUIRE(((*conversion >> 8) & 3) == 2); // 32-bit result
+            // Half expansion is exact before F32 integral conversion and selects the named half.
+            const auto unpack = std::ranges::find_if(lowered.instructions, [](u64 word) {
+                return word >> 52 == 0x5ca && ((word >> 10) & 3) == 1;
+            });
+            REQUIRE(unpack != lowered.instructions.end());
+            REQUIRE(((*unpack >> 41) & 1) == u32{high});
+        }
+    }
+}
+
+TEST_CASE("Ampere Yoshi F2FP packs a uniform floating source",
+          "[video_core][ampere][yoshi_frnd]") {
+    const Instruction exit{{0x0000794d, 0, 0x03800000, 0}};
+    std::array<Instruction, 2> code{{
+        {{0xff187c3e, 8, 0x080000ff, 0x002fe400}}, exit,
+    }};
+    const auto lowered = LowerToMaxwell(code);
+    REQUIRE(lowered);
+    REQUIRE(lowered.instructions.size() == 4);
+    REQUIRE(((lowered.instructions[0] >> 20) & 255) == 255); // zero low half
+    REQUIRE(((lowered.instructions[1] >> 20) & 255) == 224); // UR8 is R224
+    REQUIRE(((lowered.instructions[2] >> 20) & 255) == 251); // high converted half
+    auto invalid = code;
+    invalid[0].words[2] ^= 1U << 27; // required uniform-source mode
+    REQUIRE_FALSE(LowerToMaxwell(invalid));
+    invalid = code;
+    invalid[0].words[1] = 64; // outside uniform bank
+    REQUIRE_FALSE(LowerToMaxwell(invalid));
+}
+
+TEST_CASE("Ampere Yoshi I2F preserves half result and integer source width",
+          "[video_core][ampere][yoshi_frnd]") {
+    const Instruction exit{{0x0000794d, 0, 0x03800000, 0}};
+    for (const u32 round : {0U, 1U, 2U, 3U}) {
+        for (const bool uniform : {false, true}) {
+            std::array<Instruction, 2> code{{
+                {{uniform ? 0x001e7d06U : 0x001e7306U, 0x1b,
+                  0x00200c00U | (round << 14) | (uniform ? 0x08000000U : 0), 0x000e2400}},
+                exit,
+            }};
+            const auto lowered = LowerToMaxwell(code);
+            REQUIRE(lowered);
+            REQUIRE(lowered.instructions.size() == 2);
+            const u64 word = lowered.instructions.front();
+            REQUIRE(((word >> 8) & 3) == 1);
+            REQUIRE(((word >> 10) & 3) == 2);
+            REQUIRE(((word >> 13) & 1) == 1);
+            REQUIRE(((word >> 39) & 3) == round);
+            REQUIRE(((word >> 20) & 255) == (uniform ? 245 : 0x1b));
+        }
+    }
+}
 } // namespace

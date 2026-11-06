@@ -416,7 +416,7 @@
   </action>
   <action name="action_Report_Crash">
    <property name="text">
-    <string>Report a &amp;Crash on GitHub...</string>
+    <string>Report an &amp;Issue on GitHub...</string>
    </property>
   </action>
   <action name="action_Open_UserHandbook">

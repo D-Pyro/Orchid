@@ -72,7 +72,7 @@ using VideoCommon::GenericEnvironment;
 using VideoCommon::GraphicsEnvironment;
 using VideoCommon::ShaderSnapshotFailure;
 
-constexpr u32 CACHE_VERSION = 0x4e4f0002; // Supported-games lowering revision; separate from V3.
+constexpr u32 CACHE_VERSION = 0x4e4f0007; // Integrated Ampere, storage image and dynamic texture fixes.
 constexpr size_t VULKAN_CACHE_FLUSH_PIPELINES = 128;
 constexpr size_t VULKAN_CACHE_FLUSH_MIN_SECONDS = 30;
 constexpr std::array<char, 8> VULKAN_CACHE_MAGIC_NUMBER{'y', 'u', 'z', 'u', 'v', 'k', 'c', 'h'};
@@ -497,7 +497,12 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
     const char* tensor_mode = std::getenv("EDEN_NX2_TENSOR");
     const bool tensor_enabled = tensor_mode && std::string_view{tensor_mode} == "fast" &&
                                 device.IsExtCooperativeMatrixSupported();
-    SetCooperativeMatrixSupported(tensor_enabled);
+    const bool software_tensor_enabled = tensor_mode &&
+        std::string_view{tensor_mode} == "software" && device.IsSoftwareTensorSupported();
+    SetCooperativeMatrixSupported(tensor_enabled || software_tensor_enabled);
+    if (software_tensor_enabled) {
+        LOG_INFO(Render_Vulkan, "Native HMMA uses 32-lane software matrix arithmetic");
+    }
     if (use_async_translation) {
         LOG_INFO(Render_Vulkan, "Native graphics pipelines are translated on {} worker threads",
                  num_translation_threads);
@@ -613,6 +618,7 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
         .has_broken_spirv_subgroup_shuffle = driver_id == VK_DRIVER_ID_QUALCOMM_PROPRIETARY,
         .max_subgroup_size = device.GetMaxSubgroupSize(),
         .support_cooperative_matrix = tensor_enabled,
+        .support_software_tensor = software_tensor_enabled,
         .max_compute_shared_memory_size = device.GetMaxComputeSharedMemorySize(),
         .max_tensor_workgroup_size = device.GetMaxTensorWorkgroupSize(),
         .has_broken_robust =
@@ -1686,36 +1692,15 @@ void PipelineCache::SerializeGraphicsPipeline(const GraphicsPipelineCacheKey& ke
     });
 }
 
-// Asynchronous translation of native graphics pipelines (NX2_SHADER_STUTTER.md).
-//
-// The GPU thread used to translate a new pipeline (Maxwell code to IR to SPIR-V) before its
-// draw, ~2-4 ms each. Now it builds the environments, detaches them from the 3D engine (copies
-// what translation reads, see GraphicsEnvironment::Detach) and queues the translation on
-// translation_workers, then waits for the result; driver compilation runs on pipeline workers.
-// The draw gets its pipeline, and environments that cannot detach use the GPU thread instead.
-//
-// Only native (Switch 2) programs take this path: their code was lowered when the shader cache
-// met them, so translation never reads guest memory for instructions. Compute pipelines stay
-// synchronous.
+// Native graphics translation workers are retained for a future complete environment snapshot.
+// Driver pipeline compilation remains asynchronous independently of this translation gate.
 bool PipelineCache::CanTranslateAsynchronously() const {
-    // Without the reuse recorder, native pointer classification can query live GPU mappings.
-    // That state is not part of the detached snapshot: keep this debug path on the GPU thread.
+    // This path only supports native programs. Their storage-pointer classification reads live
+    // GPU mappings, which GraphicsEnvironment::Detach does not snapshot. The reuse recorder must
+    // forward and record that classification too; it cannot make the live read worker-safe.
+    // Keep translation on the GPU thread until mapping answers have an immutable snapshot.
     // Driver pipeline compilation can still use its asynchronous workers.
-    if (!use_async_translation || !use_shader_reuse) {
-        return false;
-    }
-    if (!maxwell3d->GetNativeMacroEngine().native_turing) {
-        return false;
-    }
-    for (size_t index = 0; index < Maxwell::MaxShaderProgram; ++index) {
-        if (graphics_key.unique_hashes[index] == 0) {
-            continue;
-        }
-        if (!shader_infos[index] || !shader_infos[index]->lowered_native) {
-            return false;
-        }
-    }
-    return true;
+    return false;
 }
 
 std::optional<std::future<PipelineCache::TranslatedGraphicsPipeline>>
@@ -1820,7 +1805,8 @@ std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
             diag::Emit(*trace);
     };
     ComputeEnvironment env{*kepler_compute, *gpu_memory, program_base, qmd.program_start,
-                           shader->lowered_native, profile.support_cooperative_matrix};
+                           shader->lowered_native,
+                           profile.support_cooperative_matrix || profile.support_software_tensor};
     env.SetCachedSize(shader->size_bytes);
 
     main_pools.ReleaseContents();

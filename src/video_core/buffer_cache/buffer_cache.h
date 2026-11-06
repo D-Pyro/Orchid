@@ -2104,7 +2104,12 @@ bool BufferCache<P>::Nx2CopyListPages(u64 tick) {
                 .size = end - begin,
             };
             buffer.MarkUsage(copy.src_offset, copy.size);
-            runtime.CopyBuffer(staging.buffer, buffer, std::span{&copy, 1}, true);
+            // These copies read guest buffers and write separate staging ranges. Synchronize
+            // the batch once instead of serializing graphics/compute for every list page.
+            if (!recorded) {
+                runtime.PreCopyBarrier();
+            }
+            runtime.CopyBuffer(staging.buffer, buffer, std::span{&copy, 1}, false);
             recorded = true;
             std::scoped_lock lock{nx2_list_mutex};
             Nx2ListPage& entry = nx2_list_pages[page];
@@ -2116,6 +2121,9 @@ bool BufferCache<P>::Nx2CopyListPages(u64 tick) {
             entry.copy_tick = tick;
             entry.copy_begin = static_cast<u32>(begin - page);
             entry.copy_end = static_cast<u32>(end - page);
+        }
+        if (recorded) {
+            runtime.PostCopyBarrier();
         }
         nx2_list_copy_requests.clear();
         std::erase_if(nx2_retired_list_copies, [this](auto& retired) {

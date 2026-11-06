@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <array>
+
+#include "common/common_types.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_instructions.h"
 #include "shader_recompiler/backend/spirv/spirv_emit_context.h"
-#include "common/common_types.h"
 
 namespace Shader::Backend::SPIRV {
 namespace {
@@ -15,15 +17,68 @@ namespace {
 //   C/D (16x8 row-major): d0={D[g][2i],D[g][2i+1]} d1={D[g+8][2i],D[g+8][2i+1]}
 // The fragments are staged through a Workgroup f16 scratch and consumed with the
 // NV cooperative-matrix instructions.
-constexpr u32 A_BASE = 0;    // 16x16 f16
-constexpr u32 B_BASE = 256;  // 16x8 f16
-constexpr u32 C_BASE = 384;  // 16x8 f16
-constexpr u32 D_BASE = 512;  // 16x8 f16
+constexpr u32 A_BASE = 0;   // 16x16 f16
+constexpr u32 B_BASE = 256; // 16x8 f16
+constexpr u32 C_BASE = 384; // 16x8 f16
+constexpr u32 D_BASE = 512; // 16x8 f16
+
+// Reconstruct each lane's four output elements from the PTX fragment layout above.
+// Half inputs are exact in FP32; accumulate the dot product in FP32 and round to half
+// only when writing the destination fragments. No native matrix extension is required.
+Id EmitSoftwareTensorMulAdd(EmitContext& ctx, const std::array<Id, 8>& inputs) {
+    ctx.AddCapability(spv::Capability::GroupNonUniformShuffle);
+    ctx.AddCapability(spv::Capability::GroupNonUniformBallot);
+    const Id u32ty{ctx.U32[1]};
+    const Id f32ty{ctx.F32[1]};
+    const auto imm = [&](u32 v) { return ctx.Const(v); };
+    const auto add = [&](Id a, Id b) { return ctx.OpIAdd(u32ty, a, b); };
+    const auto shl = [&](Id a, u32 b) { return ctx.OpShiftLeftLogical(u32ty, a, imm(b)); };
+    const Id active{ctx.OpGroupNonUniformBallot(ctx.U32[4], imm(3), ctx.true_value)};
+    const Id full_warp{
+        ctx.OpIEqual(ctx.U1, ctx.OpCompositeExtract(u32ty, active, 0U), imm(0xffffffffU))};
+    const Id lane{ctx.OpLoad(u32ty, ctx.subgroup_local_invocation_id)};
+    const Id row_group{ctx.OpShiftRightLogical(u32ty, lane, imm(2))};
+    const Id column_pair{shl(ctx.OpBitwiseAnd(u32ty, lane, imm(3)), 1)};
+    const auto half = [&](Id packed, u32 component) {
+        return ctx.OpCompositeExtract(f32ty, ctx.OpUnpackHalf2x16(ctx.F32[2], packed), component);
+    };
+    std::array<Id, 2> results;
+    for (u32 row_half = 0; row_half < 2; ++row_half) {
+        std::array<Id, 2> accumulators{half(inputs[6 + row_half], 0),
+                                       half(inputs[6 + row_half], 1)};
+        for (u32 k = 0; k < 16; ++k) {
+            const Id a_lane{add(shl(row_group, 2), imm((k % 8) / 2))};
+            const Id a_packed{ctx.OpGroupNonUniformShuffle(
+                u32ty, imm(3), inputs[row_half + (k >= 8 ? 2 : 0)], a_lane)};
+            const Id a{half(a_packed, k % 2)};
+            for (u32 column_half = 0; column_half < 2; ++column_half) {
+                const Id b_lane{add(shl(add(column_pair, imm(column_half)), 2), imm((k % 8) / 2))};
+                const Id b_packed{
+                    ctx.OpGroupNonUniformShuffle(u32ty, imm(3), inputs[k >= 8 ? 5 : 4], b_lane)};
+                const Id b{half(b_packed, k % 2)};
+                accumulators[column_half] = ctx.OpFma(f32ty, a, b, accumulators[column_half]);
+            }
+        }
+        results[row_half] = ctx.OpPackHalf2x16(
+            u32ty, ctx.OpCompositeConstruct(ctx.F32[2], accumulators[0], accumulators[1]));
+    }
+    // An inactive shuffle source produces an undefined value, not undefined execution.
+    // SPIR-V OpSelect explicitly discards poison from its unselected object:
+    // https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpSelect
+    // Select discards those pure arithmetic results for partial warps, where guest MMA
+    // has undefined participation. Full warps retain the complete matrix computation.
+    const Id result{ctx.OpCompositeConstruct(ctx.U32[2], results[0], results[1])};
+    const Id zero{ctx.ConstantComposite(ctx.U32[2], imm(0), imm(0))};
+    return ctx.OpSelect(ctx.U32[2], full_warp, result, zero);
+}
 
 } // Anonymous namespace
 
 Id EmitTensorMulAdd(EmitContext& ctx, IR::Inst* inst, Id a0, Id a1, Id a2, Id a3, Id b0, Id b1,
                     Id c0, Id c1) {
+    if (ctx.profile.support_software_tensor) {
+        return EmitSoftwareTensorMulAdd(ctx, {a0, a1, a2, a3, b0, b1, c0, c1});
+    }
     const Id u32ty{ctx.U32[1]};
     const Id f16{ctx.F16[1]};
     const Id f16x2{ctx.F16[2]};
@@ -50,9 +105,7 @@ Id EmitTensorMulAdd(EmitContext& ctx, IR::Inst* inst, Id a0, Id a1, Id a2, Id a3
     const auto combine = [&](Id lo, Id hi) {
         return ctx.OpBitcast(u32ty, ctx.OpCompositeConstruct(f16x2, lo, hi));
     };
-    const auto barrier = [&]() {
-        ctx.OpControlBarrier(imm(3U), imm(3U), imm(0x108U));
-    };
+    const auto barrier = [&]() { ctx.OpControlBarrier(imm(3U), imm(3U), imm(0x108U)); };
 
     const Id lane{ctx.OpLoad(u32ty, ctx.subgroup_local_invocation_id)};
     const Id sub_base{ctx.OpIMul(u32ty, ctx.OpLoad(u32ty, ctx.subgroup_id), imm(640U))};
@@ -60,9 +113,9 @@ Id EmitTensorMulAdd(EmitContext& ctx, IR::Inst* inst, Id a0, Id a1, Id a2, Id a3
     const Id bbase{add(imm(B_BASE), sub_base)};
     const Id cbase{add(imm(C_BASE), sub_base)};
     const Id dbase{add(imm(D_BASE), sub_base)};
-    const Id g{shr(lane, imm(2U))};   // lane / 4
-    const Id i{and_(lane, imm(3U))};  // lane % 4
-    const Id i2{shl(i, imm(1U))};     // 2i
+    const Id g{shr(lane, imm(2U))};                // lane / 4
+    const Id i{and_(lane, imm(3U))};               // lane % 4
+    const Id i2{shl(i, imm(1U))};                  // 2i
     const Id i4_2{shl(add(i, imm(4U)), imm(1U))};  // 8+2i
     const Id g16{shl(g, imm(4U))};                 // g*16
     const Id g8_16{shl(add(g, imm(8U)), imm(4U))}; // (g+8)*16
@@ -87,7 +140,7 @@ Id EmitTensorMulAdd(EmitContext& ctx, IR::Inst* inst, Id a0, Id a1, Id a2, Id a3
     }
     // Stage B (row-major, 16x8): b0={B[2i][g],B[2i+1][g]}, b1={B[8+2i][g],B[8+2i+1][g]}.
     {
-        const Id idx0{add(bbase, add(shl(i, imm(4U)), g))};  // (2i)*8+g
+        const Id idx0{add(bbase, add(shl(i, imm(4U)), g))};               // (2i)*8+g
         const Id idx1{add(bbase, add(shl(add(i, imm(4U)), imm(4U)), g))}; // (8+2i)*8+g
         store(idx0, lo_f16(b0));
         store(add(idx0, imm(8U)), hi_f16(b0));
@@ -115,15 +168,12 @@ Id EmitTensorMulAdd(EmitContext& ctx, IR::Inst* inst, Id a0, Id a1, Id a2, Id a3
     }
     ctx.cooperative_matrix_type_c = ctx.cooperative_matrix_type_b;
 
-    const Id mat_a =
-        ctx.OpCoopMatrixLoadNV(ctx.cooperative_matrix_type_a, ptr(abase), imm(16U),
-                               ctx.false_value);
+    const Id mat_a = ctx.OpCoopMatrixLoadNV(ctx.cooperative_matrix_type_a, ptr(abase), imm(16U),
+                                            ctx.false_value);
     const Id mat_b =
-        ctx.OpCoopMatrixLoadNV(ctx.cooperative_matrix_type_b, ptr(bbase), imm(8U),
-                               ctx.false_value);
+        ctx.OpCoopMatrixLoadNV(ctx.cooperative_matrix_type_b, ptr(bbase), imm(8U), ctx.false_value);
     const Id mat_c =
-        ctx.OpCoopMatrixLoadNV(ctx.cooperative_matrix_type_c, ptr(cbase), imm(8U),
-                               ctx.false_value);
+        ctx.OpCoopMatrixLoadNV(ctx.cooperative_matrix_type_c, ptr(cbase), imm(8U), ctx.false_value);
     const Id mat_d{ctx.OpCoopMatrixMulAddNV(ctx.cooperative_matrix_type_c, mat_a, mat_b, mat_c)};
     ctx.OpCoopMatrixStoreNV(ptr(dbase), mat_d, imm(8U), ctx.false_value);
     barrier();

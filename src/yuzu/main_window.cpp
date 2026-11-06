@@ -1989,6 +1989,25 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
         QtCommon::system->ApplySettings();
     }
 
+    // Firmware applets are not games. Keep this independent of preset overrides so every
+    // unsupported game launch requires acknowledgement, including launches with global settings.
+    if (title_id > static_cast<u64>(Service::AM::AppletProgramId::MaxProgramId) &&
+        !Settings::IsSupportedGame(title_id)) {
+        QMessageBox warning(QMessageBox::Warning, tr("Unsupported Game"),
+                            tr("I do not provide support for this game and will not investigate "
+                               "or address issues that occur in it.\n\n"
+                               "Do you want to start the game anyway?"),
+                            QMessageBox::NoButton, this);
+        auto* continue_button = warning.addButton(tr("Continue"), QMessageBox::AcceptRole);
+        auto* cancel_button = warning.addButton(QMessageBox::Cancel);
+        warning.setDefaultButton(cancel_button);
+        warning.setEscapeButton(cancel_button);
+        warning.exec();
+        if (warning.clickedButton() != continue_button) {
+            return;
+        }
+    }
+
     if (const Settings::GamePreset* preset = Settings::FindGamePreset(title_id);
         preset != nullptr) {
         using Quality = Settings::GamePresetQuality;
@@ -3472,7 +3491,7 @@ void MainWindow::OnReportCrash() {
     }
     QFile file(QString::fromStdString(Common::FS::PathToUTF8String(log_path)));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, tr("Report a Crash"),
+        QMessageBox::warning(this, tr("Report an Issue"),
                              tr("No log of a previous run was found. Start the game again until "
                                 "it crashes, then use this menu entry after restarting Orchid."));
         return;
