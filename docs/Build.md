@@ -14,6 +14,36 @@ cmake --build build
 
 On Linux, macOS, and MinGW/MSYS2, make sure to read the [dependencies guide](Deps.md). On Android, read its [dedicated page](build/Android.md).
 
+## Faster local Linux test builds
+
+After installing the normal build dependencies plus `ccache`, use:
+
+```sh
+./tools/build-local.sh
+./build-local/bin/orchid
+```
+
+Run the same command after each edit. Keep `build-local` so Ninja only rebuilds affected
+files. Existing builds skip explicit configuration unless extra CMake options or
+`--configure-only` are supplied; Ninja automatically detects changes to CMake inputs.
+This separate development build uses `-O2`, minimal debug information (`-g1`),
+ccache and the available faster linker, with LTO disabled. It builds the GUI target
+and its dependencies, without tests, CLI or the standalone room server. Graphics and
+emulation features keep their normal defaults. Full variable inspection needs a
+separate build with `-g`; performance comparisons should use the release configuration.
+
+The compiler cache lives in `${XDG_CACHE_HOME:-$HOME/.cache}/orchid/ccache`, shared
+across worktrees. The first build populates it; subsequent compatible compilations
+can reuse it. Inspect it with
+`CCACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/orchid/ccache" ccache --show-stats`.
+Parallel jobs are limited by available RAM (roughly 2 GiB per job, reserving 2 GiB)
+and CPU count. Override with `CMAKE_BUILD_PARALLEL_LEVEL=6 ./tools/build-local.sh`.
+
+Set `ORCHID_BUILD_DIR` to choose another build directory. Extra arguments go to
+CMake; `./tools/build-local.sh --configure-only` skips compilation. For example,
+worktrees can share downloaded dependency sources with
+`./tools/build-local.sh -DCPM_SOURCE_CACHE="$HOME/.cache/orchid/cpm"`.
+
 ## Dependencies
 
 First, you must [install some dependencies](Deps.md).
@@ -191,6 +221,19 @@ Your compiled executable will be in:
 - and `build/bin/orchid` for others.
 
 ## GitHub-hosted builds
+
+Release jobs already use Ninja, persistent compiler caches and explicit GUI/CLI
+targets without unit tests or room servers. They retain Release and PGO compiler
+settings; the local development script's `-O2 -g1` configuration is not used here.
+Normal Linux releases use mold for linking; Linux and MinGW PGO builds retain LLD.
+The ccache jobs hash compiler contents instead of installation timestamps and use
+the checkout as their base directory. The next run may need to repopulate cache
+entries after this configuration change.
+
+Each platform's build step reports elapsed build seconds and fresh compiler-cache
+statistics in the Actions job summary. Those times exclude dependency installation,
+cache transfer and packaging. Measure on the hosted runners before claiming a CI
+speedup; the local benchmark does not predict their total release time.
 
 The `release-binaries` workflow uses standard GitHub-hosted runners:
 

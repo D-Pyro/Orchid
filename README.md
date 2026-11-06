@@ -129,6 +129,9 @@ and run `orchid.exe`.
 
 ## Build the newest commit yourself
 
+For repeated local Linux testing, use the [faster development build](docs/Build.md#faster-local-linux-test-builds)
+with `./tools/build-local.sh` after installing the dependencies and `ccache`.
+
 Linux. Install the dependencies once:
 
 ```sh
