@@ -717,7 +717,9 @@ case 0x311: { // F2I.FTZ.U64.TRUNC, per nvdisasm: Maxwell's F2I gives 32 bits, s
             break;
         }
         case 0x227: case 0xa27: case 0x827: {
+            const u32 c = insn.Bits(64, 8);
             if ((insn.words[2] & ~0x2ffU) != 0x078e0000U || dest >= 246 ||
+                (c != 255 && ((c & 1) || c >= 246)) ||
                 (opcode == 0x227 && (insn.words[1] & ~0xffU)) ||
                 (opcode == 0xa27 && (!valid_cbuf() || insn.Bits(59, 5))))
                 return fail(index, "native high multiply mode");
@@ -728,8 +730,14 @@ case 0x311: { // F2I.FTZ.U64.TRUNC, per nvdisasm: Maxwell's F2I gives 32 bits, s
                 emit(0x4c98000000000000ULL | predicate | b | (u64{15} << 39) | cbuf());
             }
             multiply_high(a, b, insn.Bits(73, 1));
+            // IMAD.HI selects the high word after adding the full c:c+1 pair to the
+            // product. Preserve the low-product carry and read both addend words before
+            // the final destination write, including when Rd aliases either addend word.
+            multiply_low(a, b, 255, false, 247);
+            emit(0x5c10000000000000ULL | predicate | 250 | (u64{247} << 8) |
+                 (u64{c} << 20) | (u64{1} << 47));
             emit(base(0x5c10000000000000ULL) | (u64{249} << 8) |
-                 (u64{insn.Bits(64, 8)} << 20));
+                 (u64{c == 255 ? 255U : c + 1} << 20) | (u64{1} << 43));
             break;
         }
         case 0x95c:
