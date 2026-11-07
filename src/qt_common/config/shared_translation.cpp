@@ -243,10 +243,12 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
     INSERT(Settings, gpu_clock, tr("GPU Clocks"),
            tr("Makes the game believe GPU work finishes faster than it does, so it stops lowering "
               "resolution and render distance to fit the Switch's clocks."));
-    INSERT(Settings, tennis_fps, tr("Frame rate (FPS, experimental game patch)"),
-           tr("Sets Tennis' frame rate and simulation time step together. "
-              "Supports 1–1000 FPS in the supported game update. Requires a restart. "
-              "Experimental: check gameplay speed and animations."));
+    INSERT(Settings, tennis_fps, tr("Frame rate (FPS, HIGHLY EXPERIMENTAL game patch)"),
+           tr("WARNING: This Tennis FPS patch is not fully validated. CPU opponents have been "
+              "reported to swing without hitting the ball. Game speed, hit detection, ball "
+              "prediction and animations may behave incorrectly. A game speed of 100% does not "
+              "guarantee correct gameplay. Not recommended for normal play. "
+              "Supports 1–1000 FPS with a supported game update. Restart the game after changes."));
     INSERT(Settings, wonder_fps, tr("Frame rate (FPS, game patch)"),
            tr("Sets Wonder's frame rate and simulation rate together. Requires a supported game "
               "version and a restart. This target controls frame pacing; above 60 FPS, presentation "
