@@ -4,6 +4,10 @@
 #include <array>
 #include <limits>
 #include <catch2/catch_test_macros.hpp>
+#include "audio_core/sink/sink_stream.h"
+#include "common/scope_exit.h"
+#include "common/settings.h"
+#include "core/core.h"
 #include "core/hle/service/audio/nx2_sysmix_pcm.h"
 
 using namespace Service::Audio::Sysmix;
@@ -71,4 +75,59 @@ TEST_CASE("Sysmix PCM gain clips and silences nonfinite input", "[sysmix]") {
     const auto bytes = std::span{reinterpret_cast<const u8*>(pcm.data()), sizeof(pcm)};
     REQUIRE(ConvertPcm(bytes, false, 1.0f) == std::vector<s16>{-32768, 32767});
     REQUIRE(ConvertPcm(bytes, false, 2.0f) == std::vector<s16>{-32768, 32767});
+}
+
+namespace {
+class TestSinkStream final : public AudioCore::Sink::SinkStream {
+public:
+    TestSinkStream(Core::System& system_, u32 channels, u32 output_channels)
+        : SinkStream{system_, AudioCore::Sink::StreamType::Out} {
+        system_channels = channels;
+        device_channels = output_channels;
+    }
+
+    auto TakeSamples() {
+        // ReleaseBuffer applies the microphone boost; cancel it for this sample-queue check.
+        SetSystemVolume(0.125f);
+        auto samples = ReleaseBuffer(device_channels);
+        SetSystemVolume(1.0f);
+        return samples;
+    }
+};
+} // namespace
+
+TEST_CASE("Sysmix six-channel PCM reaches the sink and stereo downmix", "[sysmix]") {
+    Core::System system;
+    const auto old_volume = Settings::values.volume.GetValue();
+    const auto old_muted = Settings::values.audio_muted.GetValue();
+    SCOPE_EXIT {
+        Settings::values.volume.SetValue(old_volume);
+        Settings::values.audio_muted.SetValue(old_muted);
+    };
+    Settings::values.volume.SetValue(100);
+    Settings::values.audio_muted.SetValue(false);
+    for (u32 output_channels : {2U, 6U}) {
+        TestSinkStream sink{system, 6, output_channels};
+        const std::array<s16, 6> source{1000, 2000, 3000, 4000, 5000, 6000};
+        const auto raw = std::span{reinterpret_cast<const u8*>(source.data()), sizeof(source)};
+        auto samples = ConvertPcm(raw, false, 1.0f);
+        AudioCore::Sink::SinkBuffer buffer{1, 0, 0, false};
+        sink.AppendBuffer(buffer, samples);
+        REQUIRE(sink.GetQueueSize() == 1);
+        const auto result = sink.TakeSamples();
+        if (output_channels == 6) {
+            REQUIRE(result == std::vector<s16>(source.begin(), source.end()));
+        } else {
+            // SinkStream's established coefficients: front + .596 center + .354 LFE + .707 rear.
+            REQUIRE(result == std::vector<s16>{7739, 9446});
+        }
+        sink.ClearQueue();
+        REQUIRE(sink.GetQueueSize() == 0);
+        for (s16 full_scale : {s16{32767}, s16{-32768}}) {
+            std::vector<s16> loud(6, full_scale);
+            sink.AppendBuffer(buffer, loud);
+            REQUIRE(sink.TakeSamples() == std::vector<s16>(output_channels, full_scale));
+            sink.ClearQueue();
+        }
+    }
 }
