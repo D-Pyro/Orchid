@@ -36,12 +36,12 @@ the next game. No title is verified at 60 FPS by this initial campaign entry.
 | Other Hyrule Warriors title | Input blocked: no second Hyrule Warriors package found in /home/leon/Switch2 | Identify intended title and locate legal installed game data; continue with available titles |
 | Mario Tennis Fever | Queued; existing packaged-title smoke route available | Validate match route on current build, baseline match and menu smoke |
 | Pokémon Pokopia | First cave gameplay measured; broader validation pending | Verify saved-state reload, then measure outside/heavy scenes and investigate startup service assertion |
-| Star Fox | Queued; legacy route available | Reproduce crash separately from timing; preserve bundle and move on if blocked |
+| Star Fox | Flight tutorial reached; repeated control customization modal interrupts measurement | Reproduce modal loop and finish tutorial; no device loss reproduced in this run |
 | Super Mario Bros. Wonder | Queued; overworld filesystem seeds available | Establish level and overworld routes; distinguish guest frame cap from slow emulation |
 | Yoshi and the Mysterious Book | Queued; local package and historical stage seeds available | Verify package/demo identity before reusing saves; validate level one and level two rendering |
-| Donkey Kong Bananza | Ingot Isle gameplay measured; pacing experiment in progress | Compare stable-swap diagnostic with default, then independent repeated runs and speed/graphics gates |
+| Donkey Kong Bananza | Ingot Isle measured; swap-stable candidate deferred for timing risk | Test frames-ahead=1 without overriding requested swap pacing; repeated A/B running |
 | Kirby Air Riders | Queued; legacy race route available | Recheck reported race-load crash, capture evidence if blocked |
-| Kirby and the Forgotten Land | Identification pending: KirbySwitch2.nup exists but filename is insufficient | Verify title identity and save compatibility before route recording |
+| Kirby and the Forgotten Land | Switch 2 + Star-Crossed Worlds edition identified; hub measured | Confirm edition scope versus Switch 1 support ID; test levels, saved progress and error records |
 
 ## Initial diagnostic evidence (not a performance result)
 
@@ -237,3 +237,77 @@ before any production setting/code change. Existing global default remains uncha
 | --- | ---: | ---: | --- | --- |
 | default swap handling, Hitch trace | 1 | 48.86/s | startup unimplemented service assertion; independent correctness pending | diagnostic baseline |
 | swap-stable 120, Hitch trace | 1 | 59.91/s | final automated image mismatch | rejected for promotion; repeat candidate |
+
+## 2026-11-07: Bananza correctness review and next experiment
+
+The swap-stable candidate is DEFERRED FOR TIMING RISK, not just awaiting a looser
+image threshold. Source evidence: src/core/game_settings.cpp DonkeyKongBananza
+overrides describe game steps following requested swap interval; the built-in
+1.1.0 patch in src/core/file_sys/patch_manager.cpp also ties simulation to the
+chosen interval. Shortening the service wait while the game requests interval 2
+may accelerate simulation. Exact 3.2.0 speed impact remains unmeasured. Higher
+service cadence alone therefore cannot qualify it as an optimization. No default
+was changed. Six-run repeat attempt was cooperatively interrupted during the
+first baseline route; zero accepted batch runs. Cleanup returned 0, unforced.
+Artifacts, runner and interrupted report are retained under local MCP state
+benchmarks/goal-bananza-repeat-20261107.
+
+Image guard calibration was evaluated separately: same labelled text ROI, new
+threshold 0.05. Five known gameplay images have RMSE 0.00883–0.03761, while
+title/file-select/confirmation and black negative controls have 0.364–0.407.
+Full-frame visual inspection showed matching scene components and animation/
+illumination changes. Old failed checkpoint is preserved; new guard is named
+bananza-ingot-tunnel-v2-calibrated. Raw calibration: bananza-guard-calibration-20261107.json.
+This guard cannot prove render correctness or correct simulation.
+
+Next hypothesis tests only EDEN_NX2_FRAMES_AHEAD=1 against default. It preserves
+requested swap cadence and uses the existing previous-frame fence logic with its
+GPU-behind safety check. The measured default spent ~3.17 ms trying the current
+fence before falling back. Test whether bypassing that failed wait reduces work
+and changes the game's own interval choice. Possible stale resources, visual
+corruption and unsafe command reuse remain acceptance risks to check.
+Three independent runs per arm, alternating order, launched via the local runner
+/tmp/orchid-bananza-ahead-repeat/run.py. Current handle and terminal state must
+be rechecked before starting another GPU workload. No gain is claimed yet.
+
+## 2026-11-07: Star Fox controls-loop backlog
+
+Run 20261107-170619-1929dde6 reached intro and then the flight tutorial. Ship,
+HUD, rings and scenery were visible, and steering moved the ship. After steering,
+CUSTOMIZE CONTROLS repeatedly reappeared despite selecting No. Intended 30 s
+flight windows therefore contain a modal and are explicitly classified as dialog,
+not gameplay. Raw diagnostic: starfox-controls-loop-20261107.json. No device
+loss was reproduced; the specific later second-transmission failure is untested.
+
+Compute rejection at 18.620 s: native instruction 0x1c40, op 23c / 2004723c
+00000008 000008ff 041fe600, cooperative matrix path unavailable. This is not
+itself proof of a broken frame: kepler_compute.cpp catches matrix-multiply
+rejection and calls UpscaleInsteadOfNativeProgram. Full program/output and
+fallback visual quality still need investigation. nx2 camera/chat stub assertions
+and airplane-mode socket errors are also retained.
+Route starfox-intro-controls-loop-v1 and clean filesystem seed
+starfox-tutorial-controls-loop-20261107 saved. Seed is not RAM state; reboot
+progress is unverified. Follow-up: resolve/avoid controls modal, then measure
+uninterrupted gameplay and reproduce the reported later failure.
+
+## 2026-11-07: Kirby Forgotten Land edition identified and hub measured
+
+NUP metadata identifies KirbySwitch2.nup as Kirby and the Forgotten Land +
+Star-Crossed Worlds (Switch 2), program 04004D300C5AE001; add-on metadata
+01004D300C5AF001 carries the edition title. Existing supported-title table lists
+only Switch 1 program 01004D300C5AE000, so frontend warns Unsupported Game.
+Acknowledged Continue for an isolated exploratory run; support policy unchanged.
+
+Run 20261107-171456-6bbec008 used kirby-native-existing-save-20261106. File 1
+loads with 1% progress into Waddle Dee Town. Verified movement, characters, hub
+geometry, grass, lighting and HUD. Single idle 30 s hub window: 1,799 native
+service intervals, mean 16.66658 ms, consistent with 60/s. Separate system-frame
+work mean 16.66588 ms. This is not heavy-level or full-game validation.
+Raw metrics and all error records: kirby-forgotten-hub-20261107.json.
+Route kirby-forgotten-switch2-hub-v1 includes frontend acknowledgement. Clean
+stop confirmed. Next: verify edition scope and test a level/boss with repeated
+runs and graphics/error checks.
+
+Kirby hub gate remains pending: 15 retained error records include invalid texture
+formats, sampler filters/modes and three matrix-program rejections. Visible
+scene components alone do not prove all textures or fallback results correct.
