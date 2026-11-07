@@ -1,0 +1,68 @@
+name: issue114-linux-testbuild
+on:
+  push:
+    branches: [fix/issue114-nup-addon-metadata]
+permissions:
+  contents: read
+jobs:
+  linux-testbuild:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf cmake g++ gcc git glslang-tools libglu1-mesa-dev mold libpulse-dev libtool libudev-dev libxkbcommon-x11-0 mesa-common-dev nasm ninja-build libavfilter-dev libavcodec-dev libswscale-dev pkg-config zlib1g-dev libva-dev libvdpau-dev spirv-tools spirv-headers libusb-1.0-0-dev libboost-dev libboost-fiber-dev libboost-context-dev libopus-dev libasound2-dev ccache libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtcharts
+          cache: true
+      - name: Configure isolated test build
+        run: |
+          cmake -S . -B build/issue114 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DYUZU_TESTS=ON -DBUILD_TESTING=OFF \
+            -DYUZU_CMD=OFF -DYUZU_ROOM=OFF -DYUZU_ROOM_STANDALONE=OFF \
+            -DYUZU_USE_BUNDLED_QT=OFF -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DYUZU_USE_BUNDLED_SDL3=ON -DVulkanHeaders_FORCE_BUNDLED=ON \
+            -DVulkanUtilityLibraries_FORCE_BUNDLED=ON -DENABLE_UPDATE_CHECKER=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=mold
+      - name: Build and test
+        run: |
+          cmake --build build/issue114 --target yuzu tests --parallel 4
+          build/issue114/bin/tests '[nup]'
+      - name: Package Linux test AppImage
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/linuxdeploy" test-artifact
+          for tool in linuxdeploy/linuxdeploy linuxdeploy/linuxdeploy-plugin-qt; do
+            name=${tool#*/}
+            curl -fsSL "https://github.com/$tool/releases/download/continuous/$name-x86_64.AppImage" -o "$RUNNER_TEMP/linuxdeploy/$name.AppImage"
+            chmod +x "$RUNNER_TEMP/linuxdeploy/$name.AppImage"
+          done
+          cp dist/Orchid.png "$RUNNER_TEMP/dev.orchid.orchid.png"
+          export PATH="$RUNNER_TEMP/linuxdeploy:$PATH"
+          export APPIMAGE_EXTRACT_AND_RUN=1 QMAKE="$QT_ROOT_DIR/bin/qmake" ARCH=x86_64
+          export OUTPUT="$PWD/test-artifact/orchid-issue114-$GITHUB_SHA-linux-x86_64.AppImage"
+          export LDAI_OUTPUT="$OUTPUT"
+          mkdir -p AppDir/usr/share/licenses/orchid
+          cp -R dist/licenses/. AppDir/usr/share/licenses/orchid/
+          "$RUNNER_TEMP/linuxdeploy/linuxdeploy.AppImage" --appdir AppDir \
+            --executable build/issue114/bin/orchid --desktop-file dist/dev.eden_emu.eden.desktop \
+            --icon-file "$RUNNER_TEMP/dev.orchid.orchid.png" \
+            --plugin qt --output appimage
+          printf '%s\n' "$GITHUB_SHA" > test-artifact/COMMIT.txt
+          cd test-artifact
+          sha256sum *.AppImage > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: issue114-linux-x86_64-${{ github.sha }}
+          path: test-artifact/
+          if-no-files-found: error
+          retention-days: 14

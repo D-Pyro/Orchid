@@ -288,6 +288,11 @@ public:
         return ResultStatus::ErrorNotImplemented;
     }
 
+    /// Informational content embedded in this container; never mounts payloads.
+    virtual std::vector<FileSys::Patch> ReadEmbeddedPatches() const {
+        return {};
+    }
+
     /**
      * Get the raw update of the application, should it come packed with one
      *
@@ -295,11 +300,6 @@ public:
      *
      * @return ResultStatus result of function
      */
-    /// Informational content embedded in this container; never mounts payloads.
-    virtual std::vector<FileSys::Patch> ReadEmbeddedPatches() const {
-        return {};
-    }
-
     virtual ResultStatus ReadUpdateRaw(FileSys::VirtualFile& out_file) {
         return ResultStatus::ErrorNotImplemented;
     }
