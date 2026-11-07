@@ -25,13 +25,14 @@
 
 namespace FileSys {
 
-std::vector<std::pair<u64, VirtualFile>> NupContainer::GetAddonRomFS(u64 program_id) {
+std::vector<std::size_t> NupContainer::FindAddonPackages(u64 program_id) const {
     std::map<u64, std::size_t> selected;
     for (std::size_t i = 0; i < packages.size(); ++i) {
         const auto& package = packages[i];
         if (package.kind != PackageKind::Addon ||
             GetBaseTitleID(package.title_id) != GetBaseTitleID(program_id) ||
-            package.title_id < GetAOCBaseTitleID(program_id) || GetRomFSDir(i) == nullptr) {
+            package.title_id < GetAOCBaseTitleID(program_id) ||
+            package.romfs_dir == 0xFFFFFFFF || package.romfs_dir >= dirs.size()) {
             continue;
         }
         const auto it = selected.find(package.title_id);
@@ -39,8 +40,17 @@ std::vector<std::pair<u64, VirtualFile>> NupContainer::GetAddonRomFS(u64 program
             selected[package.title_id] = i;
         }
     }
+    std::vector<std::size_t> indices;
+    for (const auto& entry : selected) {
+        indices.push_back(entry.second);
+    }
+    return indices;
+}
+
+std::vector<std::pair<u64, VirtualFile>> NupContainer::GetAddonRomFS(u64 program_id) {
     std::vector<std::pair<u64, VirtualFile>> entries;
-    for (const auto& [title_id, index] : selected) {
+    for (const auto index : FindAddonPackages(program_id)) {
+        const auto title_id = packages[index].title_id;
         if (auto romfs = CreateRomFS(GetRomFSDir(index))) {
             LOG_INFO(Loader, "NUP add-on content {:016X} (v{}) mounted", title_id,
                      packages[index].version);

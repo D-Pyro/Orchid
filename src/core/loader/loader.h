@@ -17,6 +17,7 @@
 #include "common/common_funcs.h"
 #include "common/common_types.h"
 #include "core/file_sys/control_metadata.h"
+#include "core/file_sys/patch_manager.h"
 #include "core/file_sys/vfs/vfs.h"
 
 namespace Core {
@@ -294,6 +295,11 @@ public:
      *
      * @return ResultStatus result of function
      */
+    /// Informational content embedded in this container; never mounts payloads.
+    virtual std::vector<FileSys::Patch> ReadEmbeddedPatches() const {
+        return {};
+    }
+
     virtual ResultStatus ReadUpdateRaw(FileSys::VirtualFile& out_file) {
         return ResultStatus::ErrorNotImplemented;
     }

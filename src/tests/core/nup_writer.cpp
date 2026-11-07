@@ -615,6 +615,11 @@ TEST_CASE("NUP exposes only the newest DLC RomFS for the running application", "
     {
         NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
         REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        const auto indices = nup.FindAddonPackages(TitleId);
+        REQUIRE(indices.size() == 2);
+        REQUIRE(nup.GetPackages()[indices[0]].title_id == TitleId + 0x1001);
+        REQUIRE(nup.GetPackages()[indices[0]].version == 65536);
+        REQUIRE(nup.FindAddonPackages(0x0400ABCD00030000ULL).empty());
         addons = nup.GetAddonRomFS(TitleId);
         REQUIRE(nup.GetAddonRomFS(0x0400ABCD00030000ULL).empty());
     }
@@ -658,6 +663,11 @@ TEST_CASE("NUP preserves edition control metadata and legacy DLC ownership", "[n
     REQUIRE(title == "Native Edition Override");
     REQUIRE(loader.ReadDisplayVersion(version) == Loader::ResultStatus::Success);
     REQUIRE(version == "9.8.7");
+    const auto embedded = loader.ReadEmbeddedPatches();
+    REQUIRE(std::count_if(embedded.begin(), embedded.end(), [](const auto& patch) {
+        return patch.type == FileSys::PatchType::DLC &&
+               patch.title_id == 0x0100ABCD00011001ULL;
+    }) == 1);
     REQUIRE(restored.GetDLCBaseTitleId() == 0x0100ABCD00011000ULL);
     REQUIRE(restored.GetTitleId() == 0x0100ABCD00010000ULL);
     NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
@@ -776,4 +786,28 @@ TEST_CASE("NUP falls back from incomplete edition programs", "[nup]") {
         REQUIRE(Read(nup.GetExeFSDir(*update)->GetFile("main")) == "update 2 main");
         REQUIRE(FileSys::Nup::DumpRootFromMain(root / "Base/ExeFS/main") == root);
     }
+}
+
+TEST_CASE("NUP UI metadata belongs to each container and never invents a base update", "[nup]") {
+    TempDir t;
+    FileSys::RealVfsFilesystem real;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    const auto full = t.path / "full.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, full, {}, {}, nullptr, nullptr) ==
+            FileSys::Nup::PackResult::Success);
+    Loader::AppLoader_NUP full_loader{real.OpenFile(full.string(), FileSys::OpenMode::Read)};
+    const auto patches = full_loader.ReadEmbeddedPatches();
+    REQUIRE(std::count_if(patches.begin(), patches.end(), [](const auto& patch) {
+        return patch.type == FileSys::PatchType::Update && patch.numeric_version == 131072 &&
+               patch.source == FileSys::PatchSource::Embedded;
+    }) == 1);
+    fs::remove_all(root / "updates");
+    fs::remove_all(root / "dlc");
+    const auto base = t.path / "base.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, base, {}, {}, nullptr, nullptr) ==
+            FileSys::Nup::PackResult::Success);
+    Loader::AppLoader_NUP base_loader{real.OpenFile(base.string(), FileSys::OpenMode::Read)};
+    REQUIRE(base_loader.ReadEmbeddedPatches().empty());
+    REQUIRE(full_loader.ReadEmbeddedPatches().size() == patches.size());
 }
