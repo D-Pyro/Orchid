@@ -442,3 +442,25 @@ Further boot was blocked by another MCP instance holding the GPU lock (Bananza
 test); no lock bypass or unrelated process termination was attempted. Next:
 input-free opening replay with explicit process tracking and shader capture,
 then associate any actual GPU fault with submitted work before proposing a fix.
+
+## Bananza guest-sleep fence smoke
+
+Run 20261107-205456-28f2045a completed a single 30 s candidate window
+with EDEN_NX2_FENCE_GUEST_SLEEP=1 and Hitch tracing. The experimental
+change releases the host wake mutex and sleeps the current guest thread
+for approximately 1 ms during the bounded fence probe, instead of blocking
+the host on the condition variable. The exact uncommitted source diff is
+retained in bananza-fence-guest-smoke-20261107.json. It is not promoted.
+
+Both tunnel reference checks matched; shutdown returned 0, finalized and
+unforced, with Qt teardown observed. 1,307 native service intervals: mean
+22.954 ms, p50 16.782 ms, p95 33.476 ms, p99 33.748 ms, max 50.196 ms;
+43.566 native presents/s. Three intervals exceed 50 ms. This is service
+cadence, not GPU execution or physical display FPS. One candidate run
+without a paired baseline cannot establish gain or regression.
+
+The run retains an unimplemented IUserShimScopedObject assertion and two
+cooperative-matrix shader rejections. Full graphics, simulation speed,
+tests and Mario Tennis regression gates remain pending. No default or
+release configuration is changed. Keep this hypothesis in the backlog;
+next evaluate a stable paired scene before spending on a full repeat batch.
