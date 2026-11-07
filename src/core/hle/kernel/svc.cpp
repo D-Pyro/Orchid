@@ -23,6 +23,7 @@
 #include "common/settings.h"
 #include "core/wonder_dynamic_fps.h"
 #include "core/tennis_clock_log.h"
+#include "core/tennis_speed_meter.h"
 #include "core/tennis_dynamic_fps.h"
 #include "core/file_sys/tennis_fps_patch.h"
 #include "core/hle/kernel/k_process.h"
@@ -2726,7 +2727,7 @@ void Call(Core::System& system, u32 imm) {
             std::array<float, 3> position;
             position.fill(std::numeric_limits<float>::quiet_NaN());
             u64 object{};
-            bool observe = enabled;
+            bool observe = true;
             if (imm == 0xf009) {
                 // Original LDR X8,[X19,#0x250], after UI's actual step was selected.
                 object = context.r[19];
@@ -2751,7 +2752,7 @@ void Call(Core::System& system, u32 imm) {
                 context.v[1] = {bits, 0};
                 step = std::bit_cast<float>(bits);
             }
-            if (observe && imm != 0xf009 && memory.IsValidVirtualAddressRange(object + 0x10, 12)) {
+            if (enabled && observe && imm != 0xf009 && memory.IsValidVirtualAddressRange(object + 0x10, 12)) {
                 for (size_t axis = 0; axis < position.size(); ++axis) {
                     position[axis] = std::bit_cast<float>(memory.Read32(object + 0x10 + axis * 4));
                 }
@@ -2764,7 +2765,10 @@ void Call(Core::System& system, u32 imm) {
                 const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                      std::chrono::steady_clock::now().time_since_epoch())
                                      .count();
-                log.Observe(Settings::tennis_fps_generation.load(std::memory_order_relaxed),
+                if (imm != 0xf00b) {
+                    Core::g_tennis_speed_meter.Observe(generation, imm == 0xf00a, object, now, step, fps);
+                }
+                if (enabled) log.Observe(Settings::tennis_fps_generation.load(std::memory_order_relaxed),
                             imm == 0xf009   ? Core::TennisClockLog::Clock::UiAnimation
                             : imm == 0xf00a ? Core::TennisClockLog::Clock::CharacterIntegration
                                             : Core::TennisClockLog::Clock::BallFlight,
