@@ -33,14 +33,14 @@ the next game. No title is verified at 60 FPS by this initial campaign entry.
 | Game | Current campaign state | Next action / blocker |
 | --- | --- | --- |
 | Hyrule Warriors: Age of Imprisonment | Measured stationary gameplay at 2x; graphics gate blocked by native shader rejection | Backlog: reproduce rejected fragment shader at instruction 0xf0, validate full shader and scene, then independent baseline boots |
-| Other Hyrule Warriors title | Input blocked: no second Hyrule Warriors package found in /home/leon/Switch2 | Identify intended title and locate legal installed game data; continue with available titles |
-| Mario Tennis Fever | Queued; existing packaged-title smoke route available | Validate match route on current build, baseline match and menu smoke |
+| Other Hyrule Warriors title | Unavailable: user confirms only Imprisonment is owned/installed so far | Keep second title in availability backlog; no repeated request for its path |
+| Mario Tennis Fever | Main menu, tutorial and a regular singles match reached/measured | Repeat deterministic opponent/route; inspect text rendering and heavy fever/doubles scenes |
 | Pokémon Pokopia | First cave gameplay measured; broader validation pending | Verify saved-state reload, then measure outside/heavy scenes and investigate startup service assertion |
 | Star Fox | Flight tutorial reached; repeated control customization modal interrupts measurement | Reproduce modal loop and finish tutorial; no device loss reproduced in this run |
 | Super Mario Bros. Wonder | Queued; overworld filesystem seeds available | Establish level and overworld routes; distinguish guest frame cap from slow emulation |
-| Yoshi and the Mysterious Book | Queued; local package and historical stage seeds available | Verify package/demo identity before reusing saves; validate level one and level two rendering |
-| Donkey Kong Bananza | Ingot Isle measured; swap-stable candidate deferred for timing risk | Test frames-ahead=1 without overriding requested swap pacing; repeated A/B running |
-| Kirby Air Riders | Queued; legacy race route available | Recheck reported race-load crash, capture evidence if blocked |
+| Yoshi and the Mysterious Book | Full v1.0.2 Wildwoods entry measured; saved chapter-one profile confirmed | Trace compute/QMD errors and validate heavier/second-level graphics before promotion |
+| Donkey Kong Bananza | Ingot Isle measured; both diagnostic candidates unpromoted | Frames-ahead series terminated at candidate pre-window image mismatch; revisit with rendering/scene evidence |
+| Kirby Air Riders | Device loss reproduced during opening sequence; process exited SIGABRT | Investigate failed GPU work; no valid gameplay FPS result |
 | Kirby and the Forgotten Land | Switch 2 + Star-Crossed Worlds edition identified; hub measured | Confirm edition scope versus Switch 1 support ID; test levels, saved progress and error records |
 
 ## Initial diagnostic evidence (not a performance result)
@@ -311,3 +311,114 @@ runs and graphics/error checks.
 Kirby hub gate remains pending: 15 retained error records include invalid texture
 formats, sampler filters/modes and three matrix-program rejections. Visible
 scene components alone do not prove all textures or fallback results correct.
+
+## Availability clarification
+
+2026-11-07: user confirms only Hyrule Warriors: Age of Imprisonment is currently
+available (“Hab nur imprisonment bisher”). The other README Hyrule title stays
+in the availability backlog; do not keep asking for a nonexistent local package.
+
+## Bananza frames-ahead attempt ended
+
+The six-run attempt is TERMINAL, not still running. Baseline/1 completed scene
+guards and clean stop: one 30 s native-cadence diagnostic, 49.206/s. Candidate/1
+with only EDEN_NX2_FRAMES_AHEAD=1 failed its route checkpoint before a measurement
+window: RMSE 0.070255 > 0.05. Full screenshot shows the expected tunnel and
+characters with changed idle pose/illumination, but the automatic guard failed.
+No accepted candidate run and no valid A/B batch; neither a gain nor regression
+can be concluded from the GUI moment reading. Do not relax the guard again to
+force a result. Follow up with a less lighting-dependent scene-identification
+method and complete correctness/speed validation, or investigate the fence path
+in a different reproducible scene. No emulator defaults changed.
+
+Raw interrupted/failed attempt: bananza-frames-ahead-attempt-20261107.json.
+Runner, progress log and terminal report retained in local MCP state
+benchmarks/goal-bananza-ahead-repeat-20261107. Both emulator stops were clean.
+
+## Yoshi Wildwoods entry measurement
+
+Package-table identity confirms local Yoshi package 0400245021D2C000, update
+131072; GUI version 1.0.2. Initial seed yoshi-full-level-reached-20261106-2032
+has a zero-byte Slot00 and loads New Game. It is unsuitable for level replay.
+Seed yoshi-chapter-one-saved-20261106-2114 has a 308,611-byte Slot00 and loads
+saved Wildwoods progress. Run 20261107-172736-c04ad2a3 reaches the book, selects
+Explore and enters the habitat. Yoshi, bird/plant creatures, terrain, foreground
+and background are visible; short right input moves Yoshi. No black/purple
+frame is visible in these first-area screenshots. This does not validate level 2.
+
+30 s first-area gameplay diagnostic with idle input/camera settling: 1,795
+complete native intervals; mean 16.705 ms, p95 18.103 ms, p99 19.292 ms, max
+65.546 ms; two intervals exceed 50 ms. Mean phases (nonzero): external 6.188 ms,
+fence 2.159 ms, composite 0.008 ms, pace 8.362 ms. Single run, not repeated
+acceptance. Raw result: yoshi-wildwoods-20261107.json.
+
+Graphics/error gate pending: 123 retained records across startup/menu/loading/
+level/shutdown include invalid ZBC depth entries, native compute rejection at
+instruction 0x1c0 (all-zero instruction), QMD dispatch failures, and filesystem/
+memory errors. Their presence does not prove the visible level is entirely wrong,
+but hidden passes cannot be treated as correct. Route yoshi-wildwoods-entry-v1
+saved; clean stop verified. Next: separate menu-only errors from level failures,
+inspect full captured programs and validate the reported second-level failure.
+
+## Mario Tennis Fever regular-match diagnostic
+
+GUI version 5.0.0. First run 20261107-173224-0aca9bc0 reaches practice and
+executes a ball toss. After ending practice/news and inadvertently entering
+Adventure, saved clean seed mtf-after-first-practice-20261107. Reboot run
+20261107-173656-4da6f700 reaches main menu without first-run practice, then
+Free Play, Singles, Quick Play (7 points), Stadium Court (Grass), standard ball,
+personal rackets, Mario versus intermediate CPU Yoshi. CPU was selected with
+Random; observed identity is recorded, but route is NOT deterministic A/B input.
+
+30 s measured window contains repeated A input, serves, rallies and point
+transitions (score reaches 0–2). Both players, court, crowd, effects and scoreboard
+are visible. Native cadence: 1,791 complete intervals; mean 16.739 ms, p95
+17.820 ms, p99 22.098 ms, max 50.132 ms; four intervals exceed 33.33 ms, one
+exceeds 50 ms. Mean phases (nonzero): external 4.977 ms, fence 5.280 ms,
+composite 0.006 ms, pace 6.611 ms. These are instrumented service timings,
+not host GPU execution or physical-display FPS, and not a stable-all-scenes claim.
+
+Raw result: mtf-stadium-match-20261107.json. A previous seed's Hitch CSV was
+inherited; parser now explicitly selects the single nonempty CSV overlapping
+this monotonic window rather than the first file returned by glob. No zero-sample
+result is accepted. Two error records: missing avatar image and unmapped 48-byte
+read near shutdown. Intro/tutorial text screenshots show possible missing glyphs;
+recheck fully settled text and atlas coherence. Main-menu smoke observed, but
+full graphics/regression gate remains pending. Input route
+mtf-mario-yoshi-stadium-match-v1 and seed mtf-stadium-match-played-20261107 saved.
+
+Package identity/update inventory for available targets is recorded separately
+in target-package-inventory-20261107.json. It reads package table fields only;
+optional metadata TLVs were not interpreted across container format versions.
+
+## Wonder 60-target diagnostic
+
+Isolated seed wonder-goal60-overworld-20261107 changes only the inherited
+per-game FPS target from 120 to 60, retaining original immutable seed unchanged.
+Run 20261107-174453-4a021840 logs application of the matching built-in Wonder
+60 FPS patch. Rosalina loads saved World 1 progress. Two separate 30 s windows
+cover idle Badge House overworld and entry to Piranha Plants on Parade after
+short movement/jump. Both contain 1,799 native intervals, mean about 16.669 ms,
+no interval above 33.33 ms. This does not cover heavy traversal/Wonder effects.
+Raw result: wonder-goal60-20261107.json, including six error records. No new
+optimization is promoted. Clean stop verified; route saved as
+wonder-goal60-overworld-parade-v1.
+
+## Kirby Air Riders first diagnostic: device loss
+
+Run 20261107-175321-c4229649 starts the rendered opening sequence, with heavy
+cold compute-pipeline compilation. At 94.501865 s the actual per-game log
+reports Vulkan device loss. Immediately preceding trace records show an
+8.0 s queue_present and 8.7 s renderer_composite. These timings describe the
+failure vicinity, not its root cause. No controlled gameplay window was reached
+and no FPS result is accepted. The control server restarted across interruption
+and no longer owns this session; process liveness is checked independently
+before any new GPU workload. Preserve complete run/log and shader-cache data.
+Next: capture the failing GPU work/programs with validation and distinguish
+shader correctness, resource lifetime and driver behavior; keep in backlog while
+working on other available targets.
+
+Kirby process audit: original PID 2080287 no longer exists. Session manifest
+records return code -6, finalized=false, no forced kill. Cold log contains
+400 runtime pipeline builds, maximum 331.8 ms. No orphaned emulator restart
+is inferred from the absent control-server session.
