@@ -84,9 +84,10 @@ input clock, not a claim that every part of the game has been validated.
 can stop actual substep processing. CSV position columns contain pre-integration
 positions for character/live ball and NaN for UI.
 
-The branch remains a test build while normal GPU gameplay checks are unavailable;
-it is not pushed to main under the repository's requirement that unavailable
-required checks do not satisfy the release condition.
+This remains an experimental patch with normal GPU gameplay checks incomplete.
+The user explicitly requested committing and pushing this current state after
+being informed of the pending gameplay validation and the AI regression report.
+Publication does not establish that the AI issue has been fixed.
 
 ## Status display and AI report
 
