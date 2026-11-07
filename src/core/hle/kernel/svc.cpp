@@ -2663,13 +2663,13 @@ void Call(Core::System& system, u32 imm) {
             if (nominal > 0) {
                 static std::mutex wait_mutex;
                 static std::unordered_map<u64, u32> remainders;
-                static u64 generation{};
+                static u64 wait_generation{};
                 std::scoped_lock lock{wait_mutex};
                 const auto current =
                     Settings::tennis_fps_generation.load(std::memory_order_relaxed);
-                if (generation != current) {
+                if (wait_generation != current) {
                     remainders.clear();
-                    generation = current;
+                    wait_generation = current;
                 }
                 const u64 thread = GetCurrentThread(kernel).GetThreadId();
                 ticks =
