@@ -1,112 +1,15 @@
-name: release-binaries
-
-# Releases are manual: Actions > release-binaries > Run workflow, or
-# `gh workflow run release-binaries.yml --ref <branch>`. A push to main builds every platform
-# without publishing, only to keep the compiler caches warm: a release built right after it hits
-# the cache for nearly every object, so the Windows jobs take minutes instead of most of an hour.
-# Pull requests never start a build.
+name: Xenoblade Windows test
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
   workflow_dispatch:
-    inputs:
-      publish_release:
-        description: Publish the binaries as a GitHub release
-        type: boolean
-        default: true
-
 permissions:
   contents: read
-
-# LLVM release the Linux PGO builds compile with (LLVM's own GitHub release). A profile is written
-# by a current clang and an older reader refuses it, so this has to stay at or above whatever
-# produced orchid.profdata (23.1.4 since 0.6.1); bump it when a refreshed profile needs a newer
-# LLVM.
-env:
-  PGO_LLVM_VERSION: "23.1.4"
-
-# A newer push cancels the older cache build; a release never cancels or waits for one.
-concurrency:
-  group: release-binaries-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
-
 jobs:
-  # Every build is named v0.<minor>.<patch>, with -<channel> appended on every channel but stable:
-  # its release tag, its version string, and the prefix of its release files. The branch picks
-  # minor and channel in .github/version ("0.4" on the stable branch, "0.4-experimental" on the
-  # experimental one); the patch counts up from 0 per minor and channel. Pull requests get a
-  # -pr<number> channel that is never released. The update checker only offers its own channel.
   name:
-    name: Name the build
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      actions: write
     outputs:
-      channel: ${{ steps.name.outputs.channel }}
-      tag: ${{ steps.name.outputs.tag }}
-      previous: ${{ steps.name.outputs.previous }}
+      tag: v0.9.0-xenoblade-test1
     steps:
-      - name: Check out version file
-        uses: actions/checkout@v5
-        with:
-          sparse-checkout: .github/version
-          sparse-checkout-cone-mode: false
-
-      - id: name
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: |
-          set -euo pipefail
-          read -r base < .github/version
-          minor=${base%%-*}
-          suffix=${base#"$minor"}
-          [[ $minor =~ ^0\.[0-9]+$ && ( -z $suffix || $suffix =~ ^-[a-z]+$ ) ]] \
-            || { echo "::error::.github/version must read 0.<minor> or 0.<minor>-<channel>, not '$base'"; exit 1; }
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            echo "channel=pr-$PR_NUMBER" >> "$GITHUB_OUTPUT"
-            echo "tag=v$minor.0$suffix-pr$PR_NUMBER" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          channel=${suffix#-}
-          tags=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name')
-          # Newest release of this channel, for the changelog; then the highest patch of this minor.
-          previous=$(grep -m1 -E "^v[0-9]+\.[0-9]+\.[0-9]+$suffix\$" <<< "$tags" || true)
-          last=$(sed -nE "s/^v${minor//./\\.}\.([0-9]+)$suffix\$/\1/p" <<< "$tags" | sort -n | tail -n 1)
-          tag="v$minor.$(( ${last:--1} + 1 ))$suffix"
-          echo "channel=${channel:-stable}" >> "$GITHUB_OUTPUT"
-          echo "previous=$previous" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "Build $tag, previous release of the channel: ${previous:-none}"
-
-      # The repository's caches are capped at 10 GB. Every run saves a fresh object cache per
-      # platform, so the total passed 12 GB, GitHub evicted the least recently used entries (the
-      # Windows object caches among them) and the MSVC build recompiled a third of the tree. Only
-      # the newest cache per key prefix is ever restored, so the older ones go, and so do caches of
-      # other branches, which main cannot restore.
-      - name: Prune old caches
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh cache list --repo "$GITHUB_REPOSITORY" --limit 1000 --json id,key,ref,createdAt --jq '
-            map(.prefix = (.key | sub("-?[0-9a-f]{32,64}$"; "")))
-            | (map(select(.ref != "refs/heads/main" and .ref != env.GITHUB_REF))
-               + (map(select(.ref == "refs/heads/main" or .ref == env.GITHUB_REF))
-                  | group_by([.ref, .prefix]) | map(sort_by(.createdAt) | .[:-1]) | add // []))
-            | .[] | "\(.id) \(.key)"' |
-          while read -r id key; do
-            echo "Deleting $key"
-            # Another run may have deleted it first.
-            gh cache delete "$id" --repo "$GITHUB_REPOSITORY" || true
-          done
-
+      - run: echo "Build experimental Xenoblade test from 0.9.0"
   build:
     name: ${{ matrix.platform }} binary
     needs: name
@@ -129,29 +32,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: linux-x86_64
-            runner: ubuntu-24.04
-          - platform: macos-arm64
-            runner: macos-15
-          # The -pgo builds are the same programs compiled by clang against the repo's
-          # orchid.profdata. Eden's profile (Eden-CI/PGO) comes from Switch 1 games: with it Mario
-          # Kart World ran at about half the speed of the normal build, with orchid.profdata at
-          # about the same speed. Windows uses MSYS2's MinGW clang like Eden does; MSVC cannot read
-          # an LLVM .profdata file.
-          - platform: linux-x86_64-pgo
-            runner: ubuntu-24.04
-            pgo: true
           - platform: windows-x86_64
             runner: windows-2022
-          - platform: windows-x86_64-pgo
-            runner: windows-2022
-            pgo: true
-            mingw: true
-          - platform: linux-aarch64
-            runner: ubuntu-24.04-arm
-          - platform: linux-aarch64-pgo
-            runner: ubuntu-24.04-arm
-            pgo: true
 
     steps:
       - name: Check out source
@@ -684,6 +566,10 @@ jobs:
 
       # The artifact is the bin folder itself: GitHub zips artifacts on download, and uploading a
       # zip gave a zip inside a zip. The release job zips it once for the release.
+      - name: Include Xenoblade test launcher
+        shell: pwsh
+        run: Copy-Item tools/windows/Test-Xenoblade.cmd build/release/bin/
+
       - name: Upload Windows binary
         if: matrix.platform == 'windows-x86_64'
         uses: actions/upload-artifact@v7
@@ -734,122 +620,3 @@ jobs:
             .sccache
           key: objects-${{ matrix.platform }}-sha-${{ github.sha }}
 
-  # Publishes every binary as a GitHub release (a pre-release outside stable) once every platform
-  # built: on pushes to nx2 and nx2-experimental, and on manual runs unless "Publish the binaries as
-  # a GitHub release" is unticked.
-  release:
-    name: Publish release
-    needs: [name, build]
-    if: inputs.publish_release
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      # Only the channel's changelog (.github/release-notes/<channel>.md).
-      - name: Check out release notes
-        uses: actions/checkout@v5
-        with:
-          sparse-checkout: .github/release-notes
-          path: source
-
-      - name: Download binaries
-        uses: actions/download-artifact@v7
-        with:
-          pattern: orchid-${{ needs.name.outputs.tag }}-*
-          path: artifacts
-
-      - name: Package release files
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir dist
-          for artifact in artifacts/*/; do
-            name=$(basename "$artifact")
-            if compgen -G "$artifact*.AppImage" > /dev/null; then
-              cp "$artifact"/*.AppImage "$artifact"/*.tar.gz dist/
-            elif compgen -G "$artifact*.zip" > /dev/null; then
-              cp "$artifact"/*.zip dist/
-            else
-              (cd "$artifact" && zip -qr "${GITHUB_WORKSPACE}/dist/${name}.zip" .)
-            fi
-          done
-
-      # The notes list the commits since the channel's previous release; the app shows users the
-      # commits since their own build.
-      - name: Create release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CHANNEL: ${{ needs.name.outputs.channel }}
-          BUILD_TAG: ${{ needs.name.outputs.tag }}
-          previous: ${{ needs.name.outputs.previous }}
-        run: |
-          set -euo pipefail
-          ls -la dist
-          # A channel can carry a changelog, shown first. The title is the bare version:
-          # v0.4.1-experimental becomes "0.4.1 experimental".
-          channel_notes="source/.github/release-notes/$CHANNEL.md"
-          title="${BUILD_TAG#v}"
-          title="${title/-/ }"
-          # Stable builds are regular releases, so GitHub marks the newest one Latest.
-          prerelease=--prerelease
-          [ "$CHANNEL" = stable ] && prerelease=
-          {
-            if [ -f "$channel_notes" ]; then
-              cat "$channel_notes"
-              echo
-              echo "---"
-              echo
-            fi
-            if [ -n "$previous" ]; then
-              echo "## Changes since $previous"
-              echo
-              gh api "repos/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_SHA" \
-                --jq '.commits | reverse | .[] | "- \(.commit.message | split("\n")[0]) (\(.sha[0:7]))"'
-              echo
-            fi
-            cat <<'EOF'
-          ## Install
-
-          Windows: extract the zip and run orchid.exe, or eden-cli.exe from a terminal.
-          Linux (AppImage): make it executable (chmod +x) and run it; it bundles its libraries and needs glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13, Arch).
-          Linux (tar.gz): extract it and run ./orchid or ./eden-cli; it uses your system libraries, so Qt 6 and the usual libraries must be installed.
-          macOS: Apple Silicon and macOS 15 or newer. Extract the zip and move orchid.app to Applications. The CLI is inside orchid.app/Contents/MacOS/eden-cli. The app bundles Qt and MoltenVK and is ad-hoc signed, not notarized; macOS may require approval in Privacy & Security. macOS support remains experimental and uses the JIT, not NCE.
-          The -pgo builds are the same programs compiled with profile-guided optimization (clang plus the repo's orchid.profdata) and run on the same CPUs; if one is slower than the normal build for you, please report it. The Windows PGO build is a MinGW build, so it carries its own DLLs and needs no Visual C++ redistributable.
-
-          Orchid looks for newer builds of its channel at startup and from Help > Check for Updates.
-          EOF
-          } > notes.md
-          gh release create "$BUILD_TAG" dist/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            $prerelease \
-            --title "$title" \
-            --notes-file notes.md
-
-  # Starts the next release: an issue lists what other Eglantine forks committed since the
-  # previous release and this branch lacks (tools/fork-scan.sh, routine in docs/ForkScan.md).
-  fork-scan:
-    name: Scan other forks
-    needs: release
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Open the fork scan issue
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=$(git tag --merged HEAD --sort=-creatordate --list 'v*' | head -1)
-          tools/fork-scan.sh > scan.md
-          # Issue bodies hold 65536 characters.
-          head -c 60000 scan.md > body.md
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "Fork scan after $tag" \
-            --label fork-scan --body-file body.md
