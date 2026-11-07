@@ -230,22 +230,29 @@ std::vector<FileSys::Patch> AppLoader_NUP::ReadEmbeddedPatches() const {
     const auto& packages = nup->GetPackages();
     if (const auto update = nup->FindBestUpdatePackage()) {
         const auto& package = packages[*update];
-        patches.push_back({.enabled = true, .name = "Update",
+        patches.push_back({.enabled = true,
+                           .name = "Update",
                            .version = package.display_version.empty()
-                                          ? DecodeVersion(package.version) : package.display_version,
-                           .type = FileSys::PatchType::Update, .program_id = base_title_id,
-                           .title_id = package.title_id, .source = FileSys::PatchSource::Embedded,
+                                          ? DecodeVersion(package.version)
+                                          : package.display_version,
+                           .type = FileSys::PatchType::Update,
+                           .program_id = base_title_id,
+                           .title_id = package.title_id,
+                           .source = FileSys::PatchSource::Embedded,
                            .numeric_version = package.version});
     }
     const u64 application_id = nacp_file && nacp_file->GetDLCBaseTitleId() != 0
-                                  ? FileSys::GetBaseTitleID(nacp_file->GetDLCBaseTitleId())
-                                  : base_title_id;
+                                   ? FileSys::GetBaseTitleID(nacp_file->GetDLCBaseTitleId())
+                                   : base_title_id;
     for (const auto index : nup->FindAddonPackages(application_id)) {
         const auto& package = packages[index];
-        patches.push_back({.enabled = true, .name = "DLC",
+        patches.push_back({.enabled = true,
+                           .name = "DLC",
                            .version = fmt::format("{}", package.title_id & 0x7FF),
-                           .type = FileSys::PatchType::DLC, .program_id = application_id,
-                           .title_id = package.title_id, .source = FileSys::PatchSource::Embedded,
+                           .type = FileSys::PatchType::DLC,
+                           .program_id = application_id,
+                           .title_id = package.title_id,
+                           .source = FileSys::PatchSource::Embedded,
                            .numeric_version = package.version});
     }
     return patches;

@@ -277,12 +277,13 @@ QList<QStandardItem*> MakeGameListEntry(const std::string& path, const std::stri
     auto const file_type_string = QString::fromStdString(Loader::GetFileTypeString(file_type));
 
     // NUP metadata belongs to the file, not the title-ID-only persistent cache.
-    QString patch_versions = file_type == Loader::FileType::NUP
-        ? FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable())
-        : GetGameListCachedObject(fmt::format("{:016X}", patch.GetTitleID()), "pv.txt",
-              [&patch, &loader] {
-                  return FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable());
-              });
+    QString patch_versions =
+        file_type == Loader::FileType::NUP
+            ? FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable())
+            : GetGameListCachedObject(
+                  fmt::format("{:016X}", patch.GetTitleID()), "pv.txt", [&patch, &loader] {
+                      return FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable());
+                  });
 
     u64 play_time = play_time_manager.GetPlayTime(program_id);
     return QList<QStandardItem*>{

@@ -811,7 +811,7 @@ VirtualFile PatchManager::PatchRomFS(const NCA* base_nca, VirtualFile base_romfs
 }
 
 std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw,
-                                             const std::vector<Patch>& embedded) const {
+                                            const std::vector<Patch>& embedded) const {
     if (title_id == 0) {
         return {};
     }
