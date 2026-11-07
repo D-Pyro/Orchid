@@ -37,7 +37,7 @@ the next game. No title is verified at 60 FPS by this initial campaign entry.
 | Mario Tennis Fever | Main menu, tutorial and a regular singles match reached/measured | Repeat deterministic opponent/route; inspect text rendering and heavy fever/doubles scenes |
 | Pokémon Pokopia | First cave gameplay measured; broader validation pending | Verify saved-state reload, then measure outside/heavy scenes and investigate startup service assertion |
 | Star Fox | Flight tutorial reached; repeated control customization modal interrupts measurement | Reproduce modal loop and finish tutorial; no device loss reproduced in this run |
-| Super Mario Bros. Wonder | Queued; overworld filesystem seeds available | Establish level and overworld routes; distinguish guest frame cap from slow emulation |
+| Super Mario Bros. Wonder | Overworld and Parade entry measured with matching built-in 60 FPS patch | Repeat heavy traversal and Wonder effects; full graphics gate pending |
 | Yoshi and the Mysterious Book | Full v1.0.2 Wildwoods entry measured; saved chapter-one profile confirmed | Trace compute/QMD errors and validate heavier/second-level graphics before promotion |
 | Donkey Kong Bananza | Ingot Isle measured; both diagnostic candidates unpromoted | Frames-ahead series terminated at candidate pre-window image mismatch; revisit with rendering/scene evidence |
 | Kirby Air Riders | Device loss reproduced during opening sequence; process exited SIGABRT | Investigate failed GPU work; no valid gameplay FPS result |
@@ -422,3 +422,23 @@ Kirby process audit: original PID 2080287 no longer exists. Session manifest
 records return code -6, finalized=false, no forced kill. Cold log contains
 400 runtime pipeline builds, maximum 331.8 ms. No orphaned emulator restart
 is inferred from the absent control-server session.
+
+## Kirby Air Riders shader capture follow-up
+
+Run 20261107-205405-4f622a0e used the same initial seed and source binary,
+with native mapped shader dumps and RADV_DEBUG=hang (driver reports syncshaders
+and hang enabled). This is an instrumented diagnostic, excluded from timing.
+Shader files and SHA256 inventory are retained in the run and
+kirby-air-riders-diagnostic-20261107.json. No failing shader is identified.
+
+The opening ended after the log reached 24.54 s. Stop observed return code 0,
+no forced termination, but no frontend teardown marker; no Device loss record
+was reproduced. Termination cause is unresolved. This is not a successful
+reproduction or a correctness pass. Earlier commentary describing this as a
+crash is superseded by the recorded exit status. An initial hang-only setup run
+20261107-205342-20a60d93 was intentionally stopped and is excluded.
+
+Further boot was blocked by another MCP instance holding the GPU lock (Bananza
+test); no lock bypass or unrelated process termination was attempted. Next:
+input-free opening replay with explicit process tracking and shader capture,
+then associate any actual GPU fault with submitted work before proposing a fix.
