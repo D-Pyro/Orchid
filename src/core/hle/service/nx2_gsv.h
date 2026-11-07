@@ -1780,14 +1780,12 @@ private:
             LOG_INFO(Service, "nx2:vi2 present #{} swap interval {} at {} Hz (word 12 = {:#x})",
                      m_presents, swap_interval, refresh_rate, timing);
         }
-        // Wonder's patched simulation rate can exceed the display's nominal 60 Hz. Pace its
-        // presents at the rate actually patched into this boot, not at a changed UI preference.
-        const u32 wonder_fps =
-            system.GetApplicationProcessProgramID() == Settings::WonderSwitch2ProgramId
-                ? Settings::wonder_fps_active.load(std::memory_order_relaxed) : 0;
+        // Explicit game patches pair the presentation target with their simulation step.
+        // Read the successfully installed target, not a GUI preference changed mid-session.
+        const u32 game_fps = Settings::GetActiveGameFps(system.GetApplicationProcessProgramID());
         const auto interval = std::chrono::nanoseconds{
-            wonder_fps != 0 ? 100'000'000'000LL / wonder_fps / Settings::SpeedLimit()
-                            : 100'000'000'000LL * swap_interval / refresh_rate / Settings::SpeedLimit()};
+            game_fps != 0 ? 100'000'000'000LL / game_fps / Settings::SpeedLimit()
+                          : 100'000'000'000LL * swap_interval / refresh_rate / Settings::SpeedLimit()};
         const auto now = std::chrono::steady_clock::now();
         if (now > m_next_vblank + interval) {
             // Running slower than the swap interval: show at once and don't bank the lost time.
@@ -2349,11 +2347,19 @@ private:
         if (!m_vsync_timer) {
             m_vsync_timer = Core::Timing::CreateEvent(
                 "nx2:vi2 vsync",
-                [vsync_state = m_vsync, &kernel = system.Kernel()](
+                [vsync_state = m_vsync, &kernel = system.Kernel(),
+                 program_id = system.GetApplicationProcessProgramID()](
                     s64, std::chrono::nanoseconds) -> std::optional<std::chrono::nanoseconds> {
                     std::scoped_lock lk{vsync_state->mutex};
                     for (auto* vsync : vsync_state->events) {
                         vsync->Signal(kernel);
+                    }
+                    // This timer can start before Tennis' NRO has been loaded. Follow
+                    // the active patch each tick instead of latching a 60-Hz startup value.
+                    const u32 fps = program_id == Settings::TennisFpsProgramId
+                                        ? Settings::GetActiveGameFps(program_id) : 0;
+                    if (fps != 0) {
+                        return std::chrono::nanoseconds{1'000'000'000LL / fps};
                     }
                     return std::nullopt;
                 });
