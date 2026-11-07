@@ -4,6 +4,11 @@ name: tests
 # Pushes and pull requests never start a build.
 on:
   workflow_dispatch:
+    inputs:
+      reporter_build:
+        description: Package a Windows reporter test build (no release)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,6 +29,17 @@ jobs:
 
       - name: Set up MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt for reporter build
+        if: inputs.reporter_build
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtcharts
+          cache: true
 
       - name: Install sccache
         shell: pwsh
@@ -65,7 +81,8 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DYUZU_TESTS=ON
           -DDYNARMIC_TESTS=ON
-          -DENABLE_QT=OFF
+          -DENABLE_QT=${{ inputs.reporter_build && 'ON' || 'OFF' }}
+          -DYUZU_USE_BUNDLED_QT=OFF
           -DYUZU_CMD=OFF
           -DYUZU_ROOM=OFF
           -DYUZU_ROOM_STANDALONE=OFF
@@ -90,3 +107,34 @@ jobs:
       - name: Run dynarmic tests
         shell: bash
         run: build/tests/bin/dynarmic_tests.exe --durations yes
+
+      - name: Build reporter GUI
+        if: inputs.reporter_build
+        shell: bash
+        run: cmake --build build/tests --target yuzu --parallel
+
+      - name: Package reporter GUI
+        if: inputs.reporter_build
+        shell: pwsh
+        run: |
+          if (-not (Test-Path build/tests/bin/orchid.exe)) { throw "Missing GUI" }
+          windeployqt --release --no-translations build/tests/bin/orchid.exe
+          @"
+          Commit: ${{ github.sha }}
+          Platform: Windows x86_64 MSVC Release test build
+          Extract the entire archive, then run orchid.exe.
+          Keep existing headset, surround and emulator settings unchanged.
+          Start Orbitals 5.0.0 and compare intro, menu and gameplay audio.
+          Report which stages are audible, distortion or missing channels, and any regression.
+          This build is unverified in Orbitals on real Windows hardware.
+          "@ | Set-Content build/tests/bin/REPORTER-TEST.txt
+          Remove-Item build/tests/bin/*tests*.exe -ErrorAction SilentlyContinue
+
+      - name: Upload reporter build
+        if: inputs.reporter_build
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue84-windows-x86_64-${{ github.sha }}
+          path: build/tests/bin/
+          if-no-files-found: error
+          retention-days: 14
