@@ -464,3 +464,24 @@ cooperative-matrix shader rejections. Full graphics, simulation speed,
 tests and Mario Tennis regression gates remain pending. No default or
 release configuration is changed. Keep this hypothesis in the backlog;
 next evaluate a stable paired scene before spending on a full repeat batch.
+
+## Bananza fence control smoke
+
+Control run 20261107-205832-4c403b53 completed with
+EDEN_NX2_FENCE_GUEST_SLEEP=0 using the same binary, game, seed and settings
+identities as the enabled smoke above. The runner's `candidate` arm label
+is misleading: the retained environment field explicitly disables guest sleep.
+Both calibrated reference ROIs matched; exit status 0, finalized, no forced
+termination, and Qt teardown observed. The 30 s window contains 1,123 native
+present-service intervals: mean 26.729 ms, p50 33.137 ms, p95 33.639 ms,
+p99 33.861 ms, maximum 35.738 ms and no intervals over 50 ms.
+The native service cadence is 37.412/s. Raw metadata and errors are retained
+in bananza-fence-control-smoke-20261107.json.
+
+This supplies one disabled control for the earlier enabled smoke, not a
+repeated comparison. Independent boots and matched ROIs do not establish
+equal simulated progress or full rendering correctness. Both runs retain
+the IUserShimScopedObject assertion and two cooperative-matrix shader
+rejections. The fence hypothesis remains unpromoted and local; next run
+at least three alternating measurements per arm, then a repeat batch and
+the simulation-speed, graphics, tests and Mario Tennis regression gates.
