@@ -292,6 +292,8 @@ std::vector<FileSys::VirtualDir> FindSidecarDirs(const FileSys::VirtualDir& exef
     return dirs;
 }
 
+} // namespace
+
 // Extracted add-on content of a loose dump: <game>/dlc/<aoc title id>/<version>/romfs. Switch 2
 // Edition upgrade packs ship this way (often just a placeholder file), and the game only unlocks
 // once aoc:u lists them. Dumpers name the pack after the NX application (0100...) even when the
@@ -322,7 +324,25 @@ std::vector<std::pair<u64, FileSys::VirtualFile>> FindLooseAOC(const FileSys::Vi
             if (version.empty() || version.find_first_not_of("0123456789") != std::string::npos) {
                 continue;
             }
-            const auto candidate = version_dir->GetSubdirectory("romfs");
+            auto candidate = version_dir->GetSubdirectory("romfs");
+            if (candidate == nullptr) {
+                const auto base = version_dir->GetSubdirectory("base");
+                for (const auto& package : {version_dir, base}) {
+                    if (package == nullptr) {
+                        continue;
+                    }
+                    candidate = package->GetSubdirectory("romfs");
+                    if (candidate == nullptr) {
+                        const auto programs = package->GetSubdirectory("program");
+                        const auto zero = programs != nullptr ? programs->GetSubdirectory("0")
+                                                              : nullptr;
+                        candidate = zero != nullptr ? zero->GetSubdirectory("romfs") : nullptr;
+                    }
+                    if (candidate != nullptr) {
+                        break;
+                    }
+                }
+            }
             if (candidate != nullptr && (romfs_dir == nullptr || std::stoull(version) >= best_version)) {
                 romfs_dir = candidate;
                 best_version = std::stoull(version);
@@ -337,8 +357,6 @@ std::vector<std::pair<u64, FileSys::VirtualFile>> FindLooseAOC(const FileSys::Vi
     }
     return out;
 }
-
-} // namespace
 
 AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(FileSys::VirtualFile file_, bool override_update_)
     : AppLoader(std::move(file_))

@@ -19,6 +19,10 @@ class System;
 
 namespace Loader {
 
+/// Resolve the add-on content stored alongside a loose multi-program dump.
+std::vector<std::pair<u64, FileSys::VirtualFile>> FindLooseAOC(
+    const FileSys::VirtualDir& exefs_dir, u64 program_id);
+
 /**
  * This class loads a "deconstructed ROM directory", which are the typical format we see for Switch
  * game dumps. The path should be a "main" NSO, which must be in a directory that contains the other
