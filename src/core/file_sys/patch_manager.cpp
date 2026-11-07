@@ -810,6 +810,30 @@ VirtualFile PatchManager::PatchRomFS(const NCA* base_nca, VirtualFile base_romfs
     return romfs;
 }
 
+bool PatchManager::AppendEmbeddedPatches(std::vector<Patch>& out,
+                                         std::vector<ContentProviderEntry>& dlc_match,
+                                         const std::vector<Patch>& embedded) {
+    bool has_embedded_dlc = false;
+    for (const auto& patch : embedded) {
+        if (patch.type == PatchType::Update) {
+            std::erase_if(out, [&patch](const Patch& existing) {
+                return existing.type == PatchType::Update &&
+                       existing.numeric_version == patch.numeric_version;
+            });
+            out.push_back(patch);
+        } else if (patch.type == PatchType::DLC) {
+            has_embedded_dlc = true;
+            if (std::none_of(dlc_match.begin(), dlc_match.end(), [&patch](const auto& entry) {
+                    return entry.title_id == patch.title_id;
+                })) {
+                dlc_match.push_back({.title_id = patch.title_id, .type = ContentRecordType::Data});
+            }
+        }
+    }
+
+    return has_embedded_dlc;
+}
+
 std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw,
                                             const std::vector<Patch>& embedded) const {
     if (title_id == 0) {
@@ -1143,23 +1167,7 @@ std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw,
         dlc_match.push_back(entry);
     }
 
-    bool has_embedded_dlc = false;
-    for (const auto& patch : embedded) {
-        if (patch.type == PatchType::Update) {
-            std::erase_if(out, [&patch](const Patch& existing) {
-                return existing.type == PatchType::Update &&
-                       existing.numeric_version == patch.numeric_version;
-            });
-            out.push_back(patch);
-        } else if (patch.type == PatchType::DLC) {
-            has_embedded_dlc = true;
-            if (std::none_of(dlc_match.begin(), dlc_match.end(), [&patch](const auto& entry) {
-                    return entry.title_id == patch.title_id;
-                })) {
-                dlc_match.push_back({.title_id = patch.title_id, .type = ContentRecordType::Data});
-            }
-        }
-    }
+    const bool has_embedded_dlc = AppendEmbeddedPatches(out, dlc_match, embedded);
 
     if (!dlc_match.empty()) {
         // Ensure sorted so DLC IDs show in order.

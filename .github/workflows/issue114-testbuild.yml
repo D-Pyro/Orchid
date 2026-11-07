@@ -4,6 +4,9 @@ on:
     branches: [fix/issue114-nup-addon-metadata]
 permissions:
   contents: read
+concurrency:
+  group: issue114-testbuild-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   linux-testbuild:
     runs-on: ubuntu-24.04

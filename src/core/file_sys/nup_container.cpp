@@ -31,8 +31,7 @@ std::vector<std::size_t> NupContainer::FindAddonPackages(u64 program_id) const {
         const auto& package = packages[i];
         if (package.kind != PackageKind::Addon ||
             GetBaseTitleID(package.title_id) != GetBaseTitleID(program_id) ||
-            package.title_id < GetAOCBaseTitleID(program_id) || package.romfs_dir == 0xFFFFFFFF ||
-            package.romfs_dir >= dirs.size()) {
+            package.title_id < GetAOCBaseTitleID(program_id) || package.romfs_dir == 0xFFFFFFFF) {
             continue;
         }
         const auto it = selected.find(package.title_id);

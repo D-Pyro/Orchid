@@ -896,3 +896,33 @@ TEST_CASE("NUP embedded patch merging deduplicates DLC identities", "[nup]") {
     REQUIRE(dlc->enabled);
     REQUIRE(dlc->source == FileSys::PatchSource::Embedded);
 }
+
+TEST_CASE("NUP metadata merges installed and embedded content without duplicate IDs", "[nup]") {
+    std::vector<FileSys::Patch> patches;
+    std::vector<FileSys::ContentProviderEntry> installed{
+        {.title_id = TitleId + 0x1001, .type = FileSys::ContentRecordType::Data}};
+    REQUIRE_FALSE(FileSys::PatchManager::AppendEmbeddedPatches(patches, installed, {}));
+    REQUIRE(installed.size() == 1);
+    const FileSys::Patch addon{.enabled = true,
+                               .name = "DLC",
+                               .version = "1",
+                               .type = FileSys::PatchType::DLC,
+                               .program_id = TitleId,
+                               .title_id = TitleId + 0x1001,
+                               .source = FileSys::PatchSource::Embedded};
+    REQUIRE(FileSys::PatchManager::AppendEmbeddedPatches(patches, installed, {addon}));
+    REQUIRE(installed.size() == 1);
+    REQUIRE(installed[0].title_id == addon.title_id);
+    const FileSys::Patch update{.enabled = true,
+                                .name = "Update",
+                                .version = "1.0.0",
+                                .type = FileSys::PatchType::Update,
+                                .program_id = TitleId,
+                                .title_id = TitleId,
+                                .source = FileSys::PatchSource::Embedded,
+                                .numeric_version = 65536};
+    patches.push_back(update);
+    REQUIRE_FALSE(FileSys::PatchManager::AppendEmbeddedPatches(patches, installed, {update}));
+    REQUIRE(patches.size() == 1);
+    REQUIRE(patches[0].source == FileSys::PatchSource::Embedded);
+}
