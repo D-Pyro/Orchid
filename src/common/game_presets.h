@@ -136,12 +136,29 @@ inline const GamePreset* FindGamePreset(u64 program_id) {
     return nullptr;
 }
 
+/// Target games without a graphics preset. Switch 2 Editions use the 0400 prefix and end in 1.
+inline constexpr u64 SupportedGamesWithoutPreset[] = {
+    0x01002B00111A2000ULL, // Hyrule Warriors: Age of Calamity
+    WonderSwitch2ProgramId,
+    0x04004D300C5AE001ULL, // Kirby and the Forgotten Land + Star-Crossed Worlds (Switch 2)
+    0x040004F027560000ULL, // Orbitals
+    0x0100FF500E34A000ULL, // Xenoblade Chronicles: Definitive Edition
+    0x0400FF500E34A001ULL, // Xenoblade Chronicles: Definitive Edition (Switch 2 Edition)
+    0x0100E95004038000ULL, // Xenoblade Chronicles 2
+    0x0400E95004038001ULL, // Xenoblade Chronicles 2 (Switch 2 Edition)
+    0x0100453019AA8000ULL, // Xenoblade Chronicles X: Definitive Edition
+    0x0400453019AA8001ULL, // Xenoblade Chronicles X: Definitive Edition (Switch 2 Edition)
+    0x010074F013262000ULL, // Xenoblade Chronicles 3
+};
+
 /// Support follows the README project scope, independently of available graphics presets.
 inline bool IsSupportedGame(u64 program_id) {
-    constexpr u64 HyruleWarriorsAgeOfCalamityProgramId = 0x01002B00111A2000ULL;
-    return program_id == HyruleWarriorsAgeOfCalamityProgramId ||
-           program_id == WonderSwitch2ProgramId ||
-           FindGamePreset(program_id) != nullptr;
+    for (const u64 id : SupportedGamesWithoutPreset) {
+        if (id == program_id) {
+            return true;
+        }
+    }
+    return FindGamePreset(program_id) != nullptr;
 }
 
 /// Applies the title's compatibility settings and visual quality for this session. Global and

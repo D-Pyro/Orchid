@@ -47,7 +47,8 @@ Orchid's support and development focus is on demonstrably improving these games:
 - Donkey Kong Bananza
 - Kirby Air Riders
 - Kirby and the Forgotten Land
-- Xenoblade Chronicles series (all games)
+- Xenoblade Chronicles series: Definitive Edition, 2, X: Definitive Edition and 3 (Switch 1 and
+  Switch 2 Editions)
 - Orbitals
 
 These are the project's target games; inclusion here does not mean a game is already fully
