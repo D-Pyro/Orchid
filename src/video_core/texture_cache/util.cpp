@@ -570,7 +570,7 @@ void SwizzleBlockLinearImage(Tegra::MemoryManager& gpu_memory, GPUVAddr gpu_addr
                            num_tiles.depth, block.height, block.depth,
                            StrideAlignment(num_tiles, info.block, BytesPerBlockLog2(info.format),
                                            info.tile_width_spacing),
-                           gpu_memory.UsesNativeTiling());
+                           UsesNativeGobs(gpu_memory.UsesNativeTiling(), info));
         }
 
         host_offset += host_bytes_per_layer;
@@ -883,7 +883,7 @@ boost::container::small_vector<BufferImageCopy, 16> UnswizzleImage(Tegra::Memory
             .image_extent = size,
         }};
     }
-    return UnswizzleBlockLinearImage(info, input, output, gpu_memory.UsesNativeTiling());
+    return UnswizzleBlockLinearImage(info, input, output, UsesNativeGobs(gpu_memory.UsesNativeTiling(), info));
 }
 
 boost::container::small_vector<BufferImageCopy, 16> UnswizzleBlockLinearImage(
@@ -1098,7 +1098,7 @@ boost::container::small_vector<BufferImageCopy, 16> UnswizzleImageRows(
         [&](GPUVAddr address, std::span<u8> bytes) {
             gpu_memory.ReadBlockUnsafe(address, bytes.data(), bytes.size());
         },
-        gpu_addr, info, dirty_ranges, allocate, gpu_memory.UsesNativeTiling());
+        gpu_addr, info, dirty_ranges, allocate, UsesNativeGobs(gpu_memory.UsesNativeTiling(), info));
 }
 
 namespace {
@@ -1264,7 +1264,7 @@ std::vector<BufferImageCopy> UnswizzleImageRects(Tegra::MemoryManager& gpu_memor
         [&](GPUVAddr address, std::span<u8> bytes) {
             gpu_memory.ReadBlockUnsafe(address, bytes.data(), bytes.size());
         },
-        gpu_addr, info, rects, output, gpu_memory.UsesNativeTiling());
+        gpu_addr, info, rects, output, UsesNativeGobs(gpu_memory.UsesNativeTiling(), info));
 }
 
 std::vector<BufferImageCopy> UnswizzleImageRects(

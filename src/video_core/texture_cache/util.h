@@ -75,6 +75,12 @@ struct OverlapResult {
     Tegra::MemoryManager& gpu_memory, GPUVAddr gpu_addr, const ImageInfo& info,
     std::span<const u8> input, std::span<u8> output);
 
+/// Switch 2 block-linear surfaces swap GOB offset bits 5 and 6, unless their texture header asks
+/// for the Maxwell GOB layout (ImageInfo::maxwell_gobs).
+[[nodiscard]] constexpr bool UsesNativeGobs(bool native_memory, const ImageInfo& info) {
+    return native_memory && !info.maxwell_gobs;
+}
+
 [[nodiscard]] boost::container::small_vector<BufferImageCopy, 16> UnswizzleBlockLinearImage(
     const ImageInfo& info, std::span<const u8> input, std::span<u8> output, bool native_tiling);
 
