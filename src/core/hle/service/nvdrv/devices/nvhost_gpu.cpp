@@ -11,6 +11,7 @@
 #include "common/assert.h"
 #include "common/logging.h"
 #include "core/core.h"
+#include "core/core_timing.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/service/nvdrv/core/container.h"
 #include "core/hle/service/nvdrv/core/nvmap.h"
@@ -445,6 +446,7 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
     const auto bind_id = channel_state->bind_id;
     const auto enqueue = [&](Tegra::CommandList&& list, const char* origin) {
         Tegra::GpfifoCapture::RecordEnqueue(capture_id, bind_id, origin, list);
+        list.submit_ns = static_cast<u64>(system.CoreTiming().GetGlobalTimeNs().count());
         gpu.PushGPUEntries(bind_id, std::move(list));
     };
 

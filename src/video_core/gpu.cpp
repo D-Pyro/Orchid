@@ -197,7 +197,8 @@ struct GPU::Impl {
         // Ampere reports use nanoseconds, matching nvdrv's current GPU time. Scaling the
         // reports as Maxwell ticks makes the guest's CPU/GPU calibration drift each frame.
         if (g_nx2_ampere.load(std::memory_order_relaxed)) {
-            return static_cast<u64>(system.CoreTiming().GetGlobalTimeNs().count());
+            return report_clock.Next(
+                static_cast<u64>(system.CoreTiming().GetGlobalTimeNs().count()));
         }
         const u64 gpu_tick = system.CoreTiming().GetGPUTicks();
         return gpu_tick / GpuClockMultiplier(Settings::values.gpu_clock.GetValue());
@@ -410,6 +411,7 @@ struct GPU::Impl {
 
     std::list<std::function<void()>> sync_requests;
     std::atomic<u64> current_sync_fence{};
+    mutable Nx2ReportClock report_clock;
     u64 last_sync_fence{};
     std::atomic<u64> requested_sync_fence{}; ///< last_sync_fence, readable without the mutex
     std::mutex sync_request_mutex;
