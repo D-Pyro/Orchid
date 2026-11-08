@@ -27,13 +27,13 @@ jobs:
           arch: linux_gcc_64
           modules: qtcharts
           cache: true
-      # GCC on Ubuntu flags pre-existing copied loop variables in video tests.
-      # Keep the diagnostic visible without blocking this UI test artifact.
+      # Match the local test-build warning policy; keep Release optimization.
+      # Pre-existing video-test warnings must remain visible in the artifact build.
       - name: Configure isolated test build
         run: |
           cmake -S . -B build/issue114 -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DYUZU_TESTS=ON -DBUILD_TESTING=OFF \
-            -DCMAKE_CXX_FLAGS=-Wno-error=range-loop-construct \
+            -DENABLE_WERROR=OFF \
             -DYUZU_CMD=OFF -DYUZU_ROOM=OFF -DYUZU_ROOM_STANDALONE=OFF \
             -DYUZU_USE_BUNDLED_QT=OFF -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DYUZU_USE_BUNDLED_SDL3=ON -DVulkanHeaders_FORCE_BUNDLED=ON \
