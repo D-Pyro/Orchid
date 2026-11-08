@@ -34,6 +34,7 @@ add_executable(tests
     core/gpu_dirty_memory_manager.cpp
     core/nx2_readback_cache.cpp
     core/nx2_core_readback_capacity.cpp
+    core/game_settings.cpp
     core/tennis_fps_patch.cpp
     core/wonder_fps_patch.cpp
     core/nx2_sysmix_pcm.cpp
