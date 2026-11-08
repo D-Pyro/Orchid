@@ -138,6 +138,10 @@ public:
         OnCacheInvalidation(addr, size);
     }
 
+    /// Around each round of OnCachedWrite calls (one InvalidateGPUCache).
+    virtual void BeginCachedWrites() {}
+    virtual void EndCachedWrites() {}
+
     /// Value of a release the GPU already processed whose write may still be in flight on the host.
     virtual std::optional<u32> PendingSemaphoreRelease(DAddr addr) {
         return std::nullopt;

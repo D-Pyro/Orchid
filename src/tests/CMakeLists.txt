@@ -31,6 +31,7 @@ add_executable(tests
     core/core_timing.cpp
     core/page_heap.cpp
     core/read_traps.cpp
+    core/gpu_dirty_memory_manager.cpp
     core/nx2_readback_cache.cpp
     core/nx2_core_readback_capacity.cpp
     core/tennis_fps_patch.cpp

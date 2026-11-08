@@ -132,10 +132,13 @@ struct GPU::Impl {
         }
         gpu_thread.BeginAsyncGuestWrite();
         SCOPE_EXIT { gpu_thread.EndAsyncGuestWrite(); };
-        std::function<void(PAddr, size_t)> callback_writes([this](PAddr address, size_t size) {
-            renderer->ReadRasterizer()->OnCachedWrite(address, size);
+        auto* const rasterizer = renderer->ReadRasterizer();
+        std::function<void(PAddr, size_t)> callback_writes([rasterizer](PAddr address, size_t size) {
+            rasterizer->OnCachedWrite(address, size);
         });
+        rasterizer->BeginCachedWrites();
         system.GatherGPUDirtyMemory(callback_writes);
+        rasterizer->EndCachedWrites();
     }
 
     /// Signal the ending of command list.

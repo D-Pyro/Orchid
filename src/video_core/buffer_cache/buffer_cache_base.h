@@ -256,6 +256,11 @@ public:
 
     void CachedWriteMemory(DAddr device_addr, u64 size);
 
+    /// Around each round of CachedWriteMemory calls (Core::System::GatherGPUDirtyMemory): the
+    /// writes held back before it are the ones it applies.
+    void BeginCachedWrites();
+    void EndCachedWrites();
+
     bool OnCPUWrite(DAddr device_addr, u64 size);
 
     void DownloadMemory(DAddr device_addr, u64 size);
@@ -744,6 +749,21 @@ private:
         ArmReadTraps(addr, size);
     }
 
+    /// Writes downloaded bytes to guest memory, except where a held-back CPU write is newer.
+    void WriteDownloadToGuest(DAddr device_addr, const u8* data, u64 size) {
+        DAddr cursor = device_addr;
+        const auto write_until = [&](DAddr end) {
+            if (cursor < end) {
+                device_memory.WriteBlockUnsafe(cursor, data + (cursor - device_addr), end - cursor);
+            }
+        };
+        cpu_held_ranges.ForEachInRange(device_addr, size, [&](DAddr start, DAddr end) {
+            write_until(start);
+            cursor = (std::max)(cursor, end);
+        });
+        write_until(device_addr + size);
+    }
+
     // Async Buffers
     std::deque<std::optional<Async_Buffer>> async_buffers;
     std::deque<boost::container::small_vector<BufferCopy, 4>> pending_downloads;
@@ -751,6 +771,16 @@ private:
     /// fence pops. A write to a range after a download was taken removes it from that download
     /// (and every other pending one): its bytes are older than the write.
     std::deque<Common::RangeSet<DAddr>> pending_download_ranges;
+    /// Pages of GPU-written memory the guest CPU wrote, whose writes the GPU thread has not
+    /// applied yet (OnCPUWrite holds them back until CachedWriteMemory). Guest memory holds the
+    /// newest bytes there: no download may write over them before the write is applied, or the
+    /// apply reads the downloaded bytes back and the CPU's write is lost (Yoshi and the
+    /// Mysterious Book uploaded shader code over a storage buffer range the GPU kept "writing"
+    /// and drew with what was left).
+    Common::RangeSet<DAddr> cpu_held_ranges;
+    /// The pages of cpu_held_ranges held since the current round of applies began: their
+    /// writes may sit in the cores' new write lists, so the round's applies do not release them.
+    Common::RangeSet<DAddr> cpu_recent_held_ranges;
     std::optional<Async_Buffer> current_buffer;
 
     std::deque<Async_Buffer> async_buffers_death_ring;
