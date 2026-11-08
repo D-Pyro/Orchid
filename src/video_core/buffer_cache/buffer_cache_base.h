@@ -513,6 +513,8 @@ private:
 
     void BindHostIndexBuffer();
 
+    void MarkUploaded(Buffer& buffer, std::span<const BufferCopy> copies);
+
     void BindHostVertexBuffers();
 
     void BindHostDrawIndirectBuffers();
