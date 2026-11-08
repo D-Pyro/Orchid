@@ -23,6 +23,7 @@
 #include "audio_core/sink/sink.h"
 #include "audio_core/sink/sink_stream.h"
 #include "common/string_util.h"
+#include "core/hle/service/audio/nx2_sysmix_pcm.h"
 #include "core/core.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_event.h"
@@ -36,8 +37,8 @@ namespace Service::Audio {
 // Switch 2 sound mixer streams (nn::audio::sysmix, behind audsmx:u). A stream is a ring buffer in
 // the game's own memory: CreateStream hands over its address and size (4 KiB aligned), OpenStream
 // its format and length in frames, and once the streams are engaged the system takes frames out of
-// the ring at the stream's sample rate. Stereo 48 kHz S16 or F32 streams play through a host sink
-// stream of their own (Star Fox has all its sound there); other formats are drained in real time
+// the ring at the stream's sample rate. Stereo and six-channel 48 kHz S16 or F32 streams play
+// through a host sink stream of their own (Star Fox has all its sound there); other formats are drained in real time
 // so the game still sees its audio being played (Switch Sports' menu movie feeds one).
 // The ring's shared indices, in frames modulo (frame count + 1): the system's read index at
 // buffer + 0x44, the game's write index at buffer + 0x1004; the frames start at buffer + 0x1040.
@@ -151,6 +152,8 @@ private:
     }
 
     void IsStreamFormatSupported(HLERequestContext& ctx) {
+        // Unplayable formats are still drained in real time, so every format stays "supported"
+        // (Switch Sports' menu movie relies on that).
         LOG_DEBUG(Service_Audio, "called");
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
@@ -315,13 +318,11 @@ private:
             stream->frames = frames;
             stream->owed_frames = 0;
             stream->open = true;
-            const bool playable =
-                channels == 2 && sample_rate == 48000 &&
-                (sample_type == static_cast<u32>(AudioCore::SampleFormat::PcmInt16) ||
-                 sample_type == static_cast<u32>(AudioCore::SampleFormat::PcmFloat));
-            if (playable && !stream->host) {
+            const bool playable = Sysmix::IsPlayable(sample_type, channels, sample_rate);
+            Nx2SysmixCloseHost(system, *stream);
+            if (playable) {
                 stream->host = system.AudioCore().GetOutputSink().AcquireSinkStream(
-                    system, 2, fmt::format("nx2-sysmix-{}", stream->id),
+                    system, channels, fmt::format("nx2-sysmix-{}", stream->id),
                     AudioCore::Sink::StreamType::Out);
                 if (stream->host) {
                     stream->host->Start();
@@ -465,33 +466,20 @@ private:
                            u32 capacity) {
         const bool is_float = stream.sample_type == static_cast<u32>(AudioCore::SampleFormat::PcmFloat);
         const u32 sample_bytes = is_float ? sizeof(f32) : sizeof(s16);
-        const u32 frame_bytes = 2 * sample_bytes;
+        const u32 frame_bytes = stream.channels * sample_bytes;
         if (PayloadOffset + u64{capacity} * frame_bytes > stream.size) {
             return;
         }
         std::vector<u8> raw(std::size_t{count} * frame_bytes);
-        const u32 first = (std::min)(count, capacity - read);
         auto& memory = system.ApplicationMemory();
-        if (!memory.ReadBlock(stream.buffer + PayloadOffset + u64{read} * frame_bytes, raw.data(),
-                              std::size_t{first} * frame_bytes) ||
-            (count > first &&
-             !memory.ReadBlock(stream.buffer + PayloadOffset, raw.data() + std::size_t{first} * frame_bytes,
-                               std::size_t{count - first} * frame_bytes))) {
+        if (!Sysmix::ReadRing(raw, read, count, capacity, frame_bytes,
+                             [&](u64 offset, std::span<u8> out) {
+                                 return memory.ReadBlock(stream.buffer + PayloadOffset + offset,
+                                                         out.data(), out.size());
+                             })) {
             return;
         }
-        std::vector<s16> samples(std::size_t{count} * 2);
-        for (std::size_t i = 0; i < samples.size(); ++i) {
-            f32 value;
-            if (is_float) {
-                std::memcpy(&value, raw.data() + i * sizeof(f32), sizeof(f32));
-            } else {
-                s16 sample;
-                std::memcpy(&sample, raw.data() + i * sizeof(s16), sizeof(s16));
-                value = static_cast<f32>(sample) / 32768.0f;
-            }
-            value = std::isfinite(value) ? std::clamp(value * stream.gain, -1.0f, 1.0f) : 0.0f;
-            samples[i] = static_cast<s16>(std::clamp(static_cast<s32>(value * 32768.0f), -32768, 32767));
-        }
+        auto samples = Sysmix::ConvertPcm(raw, is_float, stream.gain);
         AudioCore::Sink::SinkBuffer block{count, 0, stream.host_tag++, false};
         stream.host->AppendBuffer(block, samples);
     }
@@ -524,6 +512,8 @@ private:
                     taken = 0;
                 }
                 if (taken != 0) {
+                    // Consume even if the copy fails: a stalled ring would also stop the
+                    // data event below and hang the game's audio thread.
                     if (stream->host) {
                         PlayFrames(system, *stream, read, taken, capacity);
                     }
