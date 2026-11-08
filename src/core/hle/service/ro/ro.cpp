@@ -265,7 +265,8 @@ struct ProcessContext {
         // LocateAndApplyIpsPatchesToModule(module_id, static_cast<u8*>(mapped_memory), nro_size);
 
         if (m_process->GetProgramId() == Settings::TennisFpsProgramId &&
-            header.m_module_id.data == FileSys::TennisFpsModuleId) {
+            header.m_module_id.data == FileSys::TennisFpsModuleId &&
+            FileSys::TennisFpsPatchWanted(Settings::values.tennis_fps.GetValue())) {
             std::vector<u8> module(nro_size);
             auto& memory = m_process->GetMemory();
             R_UNLESS(memory.ReadBlock(base_address, module.data(), module.size()), RO::ResultInvalidNro);

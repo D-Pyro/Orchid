@@ -126,6 +126,7 @@ void ConfigureSystem::UpdateTennisWarning() {
                "Game speed, hit detection, ball prediction and animations may behave incorrectly. "
                "<b>Reported issue: CPU opponents may swing without hitting the ball.</b> "
                "A displayed game speed of 100% does not guarantee correct gameplay. "
+               "60 FPS (the default) leaves the game unpatched. "
                "Requires a supported game update and a game restart after changing FPS."));
     }
 }

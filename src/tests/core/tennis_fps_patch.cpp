@@ -98,6 +98,13 @@ TEST_CASE("Tennis high FPS pairs presentation and actual simulation step", "[ten
     REQUIRE_FALSE(FileSys::ApplyTennisFpsPatch(module, ModuleId, 120));
 }
 
+TEST_CASE("Tennis patch stays off at the game's native 60 FPS", "[tennis_fps]") {
+    CHECK_FALSE(FileSys::TennisFpsPatchWanted(60));
+    CHECK(FileSys::TennisFpsPatchWanted(59));
+    CHECK(FileSys::TennisFpsPatchWanted(61));
+    CHECK(FileSys::TennisFpsPatchWanted(120));
+}
+
 TEST_CASE("Tennis patch rejects unknown or changed code atomically", "[tennis_fps]") {
     const auto original = CapturedModule();
     auto module = original;

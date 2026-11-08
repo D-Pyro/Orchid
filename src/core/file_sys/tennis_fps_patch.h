@@ -115,6 +115,12 @@ inline constexpr std::array TennisWaitInits{
     TennisWaitInit{0x965a70, 0x5280e108, 1800, false},
 };
 
+// The game's own rate is 60 FPS: the patch stays off there, as it changes gameplay (CPU
+// opponents missing the ball) even when it keeps that rate.
+inline constexpr bool TennisFpsPatchWanted(u32 fps) {
+    return fps != 60;
+}
+
 inline constexpr float TennisSimulationStep(float nominal, u32 fps) {
     return nominal * (60.0f / fps);
 }
