@@ -17,13 +17,15 @@
 #include <fmt/format.h>
 #include <openssl/evp.h>
 
+#include "core/core.h"
+#include "core/file_sys/control_metadata.h"
 #include "core/file_sys/nup_container.h"
 #include "core/file_sys/nup_writer.h"
-#include "core/file_sys/control_metadata.h"
-#include "core/loader/nup.h"
+#include "core/file_sys/registered_cache.h"
 #include "core/file_sys/romfs.h"
 #include "core/file_sys/vfs/vfs_real.h"
 #include "core/file_sys/vfs/vfs_vector.h"
+#include "core/loader/nup.h"
 
 namespace {
 
@@ -198,6 +200,18 @@ std::string NativeNpdm(u64 program_id) {
     SetLe(npdm, 0x420, 0x340, 4); // FAC offset relative to ACID
     return npdm;
 }
+
+class CountingNupFile final : public FileSys::VectorVfsFile {
+public:
+    using VectorVfsFile::VectorVfsFile;
+
+    std::size_t Read(u8* data, std::size_t length, std::size_t offset) const override {
+        ++reads;
+        return VectorVfsFile::Read(data, length, offset);
+    }
+
+    mutable std::size_t reads{};
+};
 
 // Applies `patch` to a valid archive, fixes up the TOC hash and opens the result.
 template <typename Patch>
@@ -423,6 +437,11 @@ TEST_CASE("NUP marks updates standalone when the dump has no base", "[nup]") {
     REQUIRE(nup.GetPackages().size() == 1);
     REQUIRE(nup.GetPackages()[0].kind == NupContainer::PackageKind::Update);
     REQUIRE(nup.GetPackages()[0].standalone_update);
+    Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    const auto embedded = loader.ReadEmbeddedPatches();
+    REQUIRE(embedded.size() == 1);
+    REQUIRE(embedded[0].type == FileSys::PatchType::Update);
+    REQUIRE(embedded[0].numeric_version == 65536);
     REQUIRE(nup.GetPackages()[0].title_id == TitleId);
     REQUIRE(Read(nup.GetRomFSDir(0)->GetFile("file")) == "rom");
 }
@@ -615,6 +634,11 @@ TEST_CASE("NUP exposes only the newest DLC RomFS for the running application", "
     {
         NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
         REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        const auto indices = nup.FindAddonPackages(TitleId);
+        REQUIRE(indices.size() == 2);
+        REQUIRE(nup.GetPackages()[indices[0]].title_id == TitleId + 0x1001);
+        REQUIRE(nup.GetPackages()[indices[0]].version == 65536);
+        REQUIRE(nup.FindAddonPackages(0x0400ABCD00030000ULL).empty());
         addons = nup.GetAddonRomFS(TitleId);
         REQUIRE(nup.GetAddonRomFS(0x0400ABCD00030000ULL).empty());
     }
@@ -658,6 +682,11 @@ TEST_CASE("NUP preserves edition control metadata and legacy DLC ownership", "[n
     REQUIRE(title == "Native Edition Override");
     REQUIRE(loader.ReadDisplayVersion(version) == Loader::ResultStatus::Success);
     REQUIRE(version == "9.8.7");
+    const auto embedded = loader.ReadEmbeddedPatches();
+    REQUIRE(std::count_if(embedded.begin(), embedded.end(), [](const auto& patch) {
+                return patch.type == FileSys::PatchType::DLC &&
+                       patch.title_id == 0x0100ABCD00011001ULL;
+            }) == 1);
     REQUIRE(restored.GetDLCBaseTitleId() == 0x0100ABCD00011000ULL);
     REQUIRE(restored.GetTitleId() == 0x0100ABCD00010000ULL);
     NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
@@ -776,4 +805,124 @@ TEST_CASE("NUP falls back from incomplete edition programs", "[nup]") {
         REQUIRE(Read(nup.GetExeFSDir(*update)->GetFile("main")) == "update 2 main");
         REQUIRE(FileSys::Nup::DumpRootFromMain(root / "Base/ExeFS/main") == root);
     }
+}
+
+TEST_CASE("NUP UI metadata belongs to each container and never invents a base update", "[nup]") {
+    TempDir t;
+    FileSys::RealVfsFilesystem real;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    const auto full = t.path / "full.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, full, {}, {}, nullptr, nullptr) ==
+            FileSys::Nup::PackResult::Success);
+    Loader::AppLoader_NUP full_loader{real.OpenFile(full.string(), FileSys::OpenMode::Read)};
+    const auto raw = ReadAll(full);
+    auto counted =
+        std::make_shared<CountingNupFile>(std::vector<u8>(raw.begin(), raw.end()), "counted.nup");
+    Loader::AppLoader_NUP counted_loader{counted};
+    counted->reads = 0;
+    const auto counted_patches = counted_loader.ReadEmbeddedPatches();
+    REQUIRE(counted->reads == 0);
+    const auto patches = full_loader.ReadEmbeddedPatches();
+    REQUIRE(counted_patches.size() == patches.size());
+    REQUIRE(std::count_if(patches.begin(), patches.end(), [](const auto& patch) {
+                return patch.type == FileSys::PatchType::Update &&
+                       patch.numeric_version == 131072 &&
+                       patch.source == FileSys::PatchSource::Embedded;
+            }) == 1);
+    fs::remove_all(root / "updates");
+    fs::remove_all(root / "dlc");
+    const auto base = t.path / "base.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, base, {}, {}, nullptr, nullptr) ==
+            FileSys::Nup::PackResult::Success);
+    Loader::AppLoader_NUP base_loader{real.OpenFile(base.string(), FileSys::OpenMode::Read)};
+    REQUIRE(base_loader.ReadEmbeddedPatches().empty());
+    REQUIRE(full_loader.ReadEmbeddedPatches().size() == patches.size());
+}
+
+TEST_CASE("NUP DLC metadata ignores an unusable newest package", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    Put(root / "dlc/0400ABCD00011001/65536/romfs/new.bin", "new");
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    auto raw = ReadAll(archive);
+    const auto toc = Le(raw, 0x08, 8);
+    for (u64 i = 0; i < Le(raw, toc + 4, 4); ++i) {
+        const auto record = toc + 0x30 + i * 0x40;
+        if (Le(raw, record, 8) == TitleId + 0x1001 && Le(raw, record + 0x14, 4) == 65536) {
+            SetLe(raw, record + 0x10, 0xFFFFFFFF, 4);
+        }
+    }
+    const auto hash = Sha256(std::string_view{raw}.substr(toc, Le(raw, 0x10, 8)));
+    std::copy(hash.begin(), hash.end(), raw.begin() + 0x18);
+    NupContainer nup{std::make_shared<FileSys::VectorVfsFile>(
+        std::vector<u8>(raw.begin(), raw.end()), "metadata.nup")};
+    REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+    const auto selected = nup.FindAddonPackages(TitleId);
+    REQUIRE(selected.size() == 1);
+    REQUIRE(nup.GetPackages()[selected[0]].version == 0);
+}
+
+TEST_CASE("NUP embedded patch merging deduplicates DLC identities", "[nup]") {
+    Core::System system;
+    FileSys::ContentProviderUnion provider{};
+    FileSys::PatchManager pm{TitleId, system.GetFileSystemController(), provider};
+    const FileSys::Patch addon{.enabled = true,
+                               .name = "DLC",
+                               .version = "1",
+                               .type = FileSys::PatchType::DLC,
+                               .program_id = TitleId,
+                               .title_id = TitleId + 0x1001,
+                               .source = FileSys::PatchSource::Embedded};
+    const FileSys::Patch update{.enabled = true,
+                                .name = "Update",
+                                .version = "2.0.0",
+                                .type = FileSys::PatchType::Update,
+                                .program_id = TitleId,
+                                .title_id = TitleId,
+                                .source = FileSys::PatchSource::Embedded,
+                                .numeric_version = 131072};
+    const auto patches = pm.GetPatches(nullptr, {addon, addon, update, update});
+    REQUIRE(std::count_if(patches.begin(), patches.end(), [](const auto& patch) {
+                return patch.type == FileSys::PatchType::Update;
+            }) == 1);
+    const auto dlc = std::find_if(patches.begin(), patches.end(), [](const auto& patch) {
+        return patch.type == FileSys::PatchType::DLC;
+    });
+    REQUIRE(dlc != patches.end());
+    REQUIRE(dlc->version == "1");
+    REQUIRE(dlc->enabled);
+    REQUIRE(dlc->source == FileSys::PatchSource::Embedded);
+}
+
+TEST_CASE("NUP metadata merges installed and embedded content without duplicate IDs", "[nup]") {
+    std::vector<FileSys::Patch> patches;
+    std::vector<FileSys::ContentProviderEntry> installed{
+        {.title_id = TitleId + 0x1001, .type = FileSys::ContentRecordType::Data}};
+    REQUIRE_FALSE(FileSys::PatchManager::AppendEmbeddedPatches(patches, installed, {}));
+    REQUIRE(installed.size() == 1);
+    const FileSys::Patch addon{.enabled = true,
+                               .name = "DLC",
+                               .version = "1",
+                               .type = FileSys::PatchType::DLC,
+                               .program_id = TitleId,
+                               .title_id = TitleId + 0x1001,
+                               .source = FileSys::PatchSource::Embedded};
+    REQUIRE(FileSys::PatchManager::AppendEmbeddedPatches(patches, installed, {addon}));
+    REQUIRE(installed.size() == 1);
+    REQUIRE(installed[0].title_id == addon.title_id);
+    const FileSys::Patch update{.enabled = true,
+                                .name = "Update",
+                                .version = "1.0.0",
+                                .type = FileSys::PatchType::Update,
+                                .program_id = TitleId,
+                                .title_id = TitleId,
+                                .source = FileSys::PatchSource::Embedded,
+                                .numeric_version = 65536};
+    patches.push_back(update);
+    REQUIRE_FALSE(FileSys::PatchManager::AppendEmbeddedPatches(patches, installed, {update}));
+    REQUIRE(patches.size() == 1);
+    REQUIRE(patches[0].source == FileSys::PatchSource::Embedded);
 }

@@ -241,9 +241,9 @@ QString FormatPatchNameVersions(const FileSys::PatchManager& patch_manager,
     QString out;
     FileSys::VirtualFile update_raw;
     loader.ReadUpdateRaw(update_raw);
-    for (const auto& patch : patch_manager.GetPatches(update_raw)) {
+    for (const auto& patch : patch_manager.GetPatches(update_raw, loader.ReadEmbeddedPatches())) {
         const bool is_update = patch.name == "Update";
-        if (!updatable && is_update) {
+        if (!updatable && is_update && patch.source != FileSys::PatchSource::Embedded) {
             continue;
         }
 
@@ -276,23 +276,14 @@ QList<QStandardItem*> MakeGameListEntry(const std::string& path, const std::stri
     auto const file_type = loader.GetFileType();
     auto const file_type_string = QString::fromStdString(Loader::GetFileTypeString(file_type));
 
-    QString patch_versions = GetGameListCachedObject(
-        fmt::format("{:016X}", patch.GetTitleID()), "pv.txt", [&patch, &loader] {
-            return FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable());
-        });
-
-    FileSys::NACP nacp{};
-    if (file_type == Loader::FileType::NUP &&
-        loader.ReadControlData(nacp) == Loader::ResultStatus::Success) {
-        const std::string version_string = nacp.GetVersionString();
-        if (!version_string.empty()) {
-            if (!patch_versions.isEmpty()) {
-                patch_versions += QLatin1Char('\n');
-            }
-            patch_versions += QStringLiteral("Update (%1)").arg(
-                QString::fromStdString(version_string));
-        }
-    }
+    // NUP metadata belongs to the file, not the title-ID-only persistent cache.
+    QString patch_versions =
+        file_type == Loader::FileType::NUP
+            ? FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable())
+            : GetGameListCachedObject(
+                  fmt::format("{:016X}", patch.GetTitleID()), "pv.txt", [&patch, &loader] {
+                      return FormatPatchNameVersions(patch, loader, loader.IsRomFSUpdatable());
+                  });
 
     u64 play_time = play_time_manager.GetPlayTime(program_id);
     return QList<QStandardItem*>{
