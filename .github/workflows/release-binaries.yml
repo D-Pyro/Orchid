@@ -630,8 +630,11 @@ jobs:
             --executable build/release/bin/eden-cli \
             --desktop-file dist/dev.eden_emu.eden.desktop \
             --icon-file "$icon" \
+            --exclude-library 'libvulkan.so*' \
             --plugin qt \
             --output appimage
+          # PGO retains FFmpeg -> libplacebo -> Vulkan; use the host loader for its layers.
+          test -z "$(find AppDir -name 'libvulkan.so*' -print -quit)"
           test -s "$LDAI_OUTPUT"
           ls -la "$LDAI_OUTPUT"
 
