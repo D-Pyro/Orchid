@@ -40,6 +40,7 @@ LaunchParams ParseLaunchParams(Core::System& system, int argc, char *argv[], wch
         {"singlecore", no_argument, 0, 's'},
         {"filter", no_argument, 0, 'x'},
         {"pack-nup", required_argument, 0, 'N'},
+        {"extract-nup", required_argument, 0, 'X'},
         {0, 0, 0, 0},
         // clang-format on
     };
@@ -69,6 +70,9 @@ LaunchParams ParseLaunchParams(Core::System& system, int argc, char *argv[], wch
                 break;
             case 'N':
                 p.pack_nup_source = std::string(optarg);
+                break;
+            case 'X':
+                p.extract_nup_source = std::string(optarg);
                 break;
             case 'i': {
                 p.input_profile = std::string(optarg);
@@ -206,7 +210,9 @@ void ApplyLaunchParams(LaunchParams const& lp) noexcept {
             "-d, --debug           Run the GDB stub on a port from 1 to 65535\n"
             "-v, --version         Output version information and exit\n"
             "--pack-nup <dump> [<out.nup>]"
-            " Pack a loose dump with all its updates and DLC into a NUP file and exit\n",
+            " Pack a loose dump with all its updates and DLC into a NUP file and exit\n"
+            "--extract-nup <in.nup> [<folder>]"
+            " Extract and verify every package of a NUP file and exit\n",
             lp.argv0
         );
     }

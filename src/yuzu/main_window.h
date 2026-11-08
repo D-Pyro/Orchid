@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -359,6 +360,8 @@ private slots:
     void OnGameListDumpRomFS(u64 program_id, const std::string& game_path, DumpRomFSTarget target);
     void OnGameListVerifyIntegrity(const std::string& game_path);
     void OnGameListConvertToNup(const std::string& game_path);
+    void OnGameListExtractNup(const std::string& game_path);
+    void OnGameListEditNupMetadata(const std::string& game_path);
     void OnGameListCopyTID(u64 program_id);
     void OnGameListCreateShortcut(u64 program_id, const std::string& game_path,
                                   const QtCommon::Game::ShortcutTarget target);
@@ -586,6 +589,15 @@ private:
     std::shared_ptr<std::atomic_bool> nup_cancel;
     bool nup_running{};
     std::string nup_source_path;
+
+    using NupJob = std::function<FileSys::Nup::PackResult(
+        const std::function<void(const FileSys::Nup::PackProgress&)>&, const std::atomic_bool*,
+        std::string*)>;
+    // Runs one NUP job at a time in the background behind a progress window. `game_path` cannot
+    // be booted meanwhile; `done` receives the result and error on the GUI thread.
+    void RunNupJob(const QString& window_title, const QString& title, const QPixmap& icon,
+                   const std::string& game_path, NupJob job,
+                   std::function<void(FileSys::Nup::PackResult, const QString&)> done);
 
     // Last game booted, used for multi-process apps
     QString last_filename_booted;

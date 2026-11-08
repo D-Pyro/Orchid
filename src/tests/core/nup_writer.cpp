@@ -933,3 +933,193 @@ TEST_CASE("NUP metadata merges installed and embedded content without duplicate 
     REQUIRE(patches.size() == 1);
     REQUIRE(patches[0].source == FileSys::PatchSource::Embedded);
 }
+
+TEST_CASE("NUP extracts every package and repacks to the same archive", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+
+    // The repacked archive records its folder name, so extract into one of the same name.
+    const auto output = t.path / "out" / "Game";
+    REQUIRE(FileSys::Nup::DefaultExtractPath(archive) == root);
+    FileSys::Nup::PackProgress last{};
+    std::string error;
+    REQUIRE(FileSys::Nup::ExtractNup(archive, output,
+                                     [&](const FileSys::Nup::PackProgress& p) { last = p; },
+                                     nullptr, &error) == FileSys::Nup::PackResult::Success);
+    INFO(error);
+    REQUIRE(last.files_done == last.files_total);
+    REQUIRE(last.bytes_done == last.bytes_total);
+    REQUIRE(last.files_total > 0);
+
+    auto expected_base = SourceTree(root / "Base");
+    std::map<std::string, std::string> lower_base;
+    for (auto& [path, data] : expected_base) {
+        auto lowered = path;
+        lowered.replace(0, 5, path.starts_with("ExeFS") ? "exefs" : "romfs");
+        lower_base[lowered] = data;
+    }
+    REQUIRE(SourceTree(output / "base") == lower_base);
+    REQUIRE(SourceTree(output / "updates/65536") == SourceTree(root / "updates/65536"));
+    REQUIRE(SourceTree(output / "updates/131072") == SourceTree(root / "updates/131072"));
+    REQUIRE(SourceTree(output / "dlc/0400ABCD00011001/0") ==
+            SourceTree(root / "dlc/0400ABCD00011001/0"));
+    REQUIRE(fs::file_size(output / "base/romfs/empty") == 0);
+
+    const auto repacked = t.path / "out" / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(output, repacked) == FileSys::Nup::PackResult::Success);
+    REQUIRE(ReadAll(repacked) == ReadAll(archive));
+}
+
+TEST_CASE("NUP extraction refuses a used folder and cleans up after damage", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+
+    const auto used = t.path / "used";
+    Put(used / "keep.txt", "mine");
+    REQUIRE(FileSys::Nup::ExtractNup(archive, used) == FileSys::Nup::PackResult::InvalidSource);
+    REQUIRE(ReadAll(used / "keep.txt") == "mine");
+    REQUIRE(std::distance(fs::directory_iterator(used), fs::directory_iterator{}) == 1);
+
+    // Damage one stored file; the TOC hash only covers the TOC, so the archive still opens.
+    auto bytes = ReadAll(archive);
+    const auto files = RawFiles(bytes);
+    const auto random =
+        std::ranges::find(files, std::string{"random.bin"}, &RawFile::name);
+    REQUIRE(random != files.end());
+    bytes[random->extent_offset + 10] ^= 0x55;
+    const auto damaged = t.path / "damaged.nup";
+    Put(damaged, bytes);
+
+    const auto output = t.path / "damaged";
+    std::string error;
+    REQUIRE(FileSys::Nup::ExtractNup(damaged, output, {}, nullptr, &error) ==
+            FileSys::Nup::PackResult::InvalidSource);
+    REQUIRE(error.find("random.bin") != std::string::npos);
+    REQUIRE_FALSE(fs::exists(output));
+
+    // An empty folder that existed before stays, emptied again.
+    fs::create_directories(output);
+    REQUIRE(FileSys::Nup::ExtractNup(damaged, output) == FileSys::Nup::PackResult::InvalidSource);
+    REQUIRE(fs::is_directory(output));
+    REQUIRE(fs::is_empty(output));
+
+    std::atomic_bool cancel{true};
+    REQUIRE(FileSys::Nup::ExtractNup(archive, t.path / "cancelled", {}, &cancel) ==
+            FileSys::Nup::PackResult::Cancelled);
+    REQUIRE_FALSE(fs::exists(t.path / "cancelled"));
+}
+
+TEST_CASE("NUP extraction rejects names that leave the target folder", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+
+    for (const std::string_view bad : {"..", ".", "a/b", "a\\b"}) {
+        auto bytes = ReadAll(archive);
+        const u64 toc = Le(bytes, 0x08, 8);
+        const u64 packages = Le(bytes, toc + 0x04, 4);
+        const u64 dirs = Le(bytes, toc + 0x08, 8);
+        const u64 file_count = Le(bytes, toc + 0x10, 8);
+        const u64 pool = toc + Le(bytes, toc + 0x18, 8);
+        u64 pos = toc + 0x30 + packages * 0x40 + dirs * 0x18;
+        bool patched = false;
+        for (u64 i = 0; i < file_count; ++i, pos += 0x50) {
+            if (bytes.substr(pool + Le(bytes, pos, 4), Le(bytes, pos + 4, 4)) == "alpha") {
+                // Point the name at fresh bytes: "alpha" is shared by no other node.
+                bytes.replace(pool + Le(bytes, pos, 4), bad.size(), bad);
+                SetLe(bytes, pos + 4, bad.size(), 4);
+                patched = true;
+            }
+        }
+        REQUIRE(patched);
+        const auto hash = Sha256(std::string_view{bytes}.substr(toc, Le(bytes, 0x10, 8)));
+        std::copy(hash.begin(), hash.end(), bytes.begin() + 0x18);
+        const auto evil = t.path / "evil.nup";
+        Put(evil, bytes);
+
+        const auto output = t.path / "nest" / "out";
+        std::string error;
+        INFO(bad);
+        REQUIRE(FileSys::Nup::ExtractNup(evil, output, {}, nullptr, &error) ==
+                FileSys::Nup::PackResult::InvalidSource);
+        REQUIRE(error.find("unsafe name") != std::string::npos);
+        REQUIRE_FALSE(fs::exists(output));
+    }
+}
+
+TEST_CASE("NUP metadata edits match packing with the same overrides", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    FileSys::Nup::Metadata metadata;
+    metadata.title_name = "Edited Name";
+    metadata.icon = {0xFF, 0xD8, 0x01, 0x02, 0xFF, 0xD9};
+    metadata.display_version = "4.5.6";
+
+    const auto expected = t.path / "expected" / "Game.nup";
+    fs::create_directories(expected.parent_path());
+    REQUIRE(FileSys::Nup::PackDump(root, expected, {.metadata = metadata}) ==
+            FileSys::Nup::PackResult::Success);
+
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    const auto original = ReadAll(archive);
+
+    // Nothing to change leaves the file alone.
+    REQUIRE(FileSys::Nup::EditNupMetadata(archive, {}) == FileSys::Nup::PackResult::Success);
+    REQUIRE(ReadAll(archive) == original);
+
+    std::string error;
+    REQUIRE(FileSys::Nup::EditNupMetadata(archive, metadata, {}, nullptr, &error) ==
+            FileSys::Nup::PackResult::Success);
+    INFO(error);
+    REQUIRE_FALSE(fs::exists(archive.string() + ".part"));
+    REQUIRE(ReadAll(archive) == ReadAll(expected));
+
+    const auto read = FileSys::Nup::ReadNupMetadata(archive);
+    REQUIRE(read);
+    REQUIRE(read->title_name == "Edited Name");
+    REQUIRE(read->icon == metadata.icon);
+    REQUIRE(read->display_version == "4.5.6");
+
+    // A second edit replaces the metadata again instead of piling it up.
+    FileSys::Nup::Metadata rename;
+    rename.title_name = "Other";
+    REQUIRE(FileSys::Nup::EditNupMetadata(archive, rename) == FileSys::Nup::PackResult::Success);
+    REQUIRE(fs::file_size(archive) == fs::file_size(expected) - 6);
+    REQUIRE(FileSys::Nup::ReadNupMetadata(archive)->title_name == "Other");
+    FileSys::RealVfsFilesystem real;
+    NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    REQUIRE(nup.VerifyIntegrity({}) == Loader::ResultStatus::Success);
+    bool visited = false;
+    REQUIRE_FALSE(nup.ForEachMember(nup.GetPackages().size(),
+                                    [&](const auto&, const auto&, const auto&, const auto&) {
+                                        visited = true;
+                                        return true;
+                                    }));
+    REQUIRE_FALSE(visited);
+    // A visitor that stops early ends the walk with false.
+    REQUIRE_FALSE(nup.ForEachMember(0, [](const auto&, const auto&, const auto&, const auto&) {
+        return false;
+    }));
+    REQUIRE(nup.ForEachMember(0, [](const auto&, const auto&, const auto&, const auto&) {
+        return true;
+    }));
+
+    REQUIRE_FALSE(FileSys::Nup::ReadNupMetadata(root / "Base/ExeFS/main"));
+    std::atomic_bool cancel{true};
+    // A reflinked copy has nothing left to cancel, so either outcome must leave a valid file.
+    const auto result = FileSys::Nup::EditNupMetadata(archive, metadata, {}, &cancel);
+    REQUIRE((result == FileSys::Nup::PackResult::Cancelled ||
+             result == FileSys::Nup::PackResult::Success));
+    REQUIRE_FALSE(fs::exists(archive.string() + ".part"));
+    REQUIRE(FileSys::Nup::ReadNupMetadata(archive));
+}

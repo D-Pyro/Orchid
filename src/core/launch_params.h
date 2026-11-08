@@ -25,6 +25,8 @@ struct LaunchParams {
     std::optional<std::string> log_filter{};
     // --pack-nup <dump> [<out.nup>]: packs a loose dump instead of booting a game (eden-cli).
     std::optional<std::string> pack_nup_source{};
+    // --extract-nup <in.nup> [<folder>]: extracts a NUP instead of booting a game (eden-cli).
+    std::optional<std::string> extract_nup_source{};
     u16 port = Network::DefaultRoomPort;
     bool use_multiplayer = false;
     bool fullscreen = false;

@@ -15,6 +15,7 @@
 #include <csignal>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -257,21 +258,20 @@ struct SdlState {
 
 static std::atomic_bool pack_nup_cancel{false};
 
-// eden-cli --pack-nup <dump> [<out.nup>]; the output defaults to <dump>.nup next to the dump.
-static bool PackNup(const std::string& source, const std::string& output) {
-    const auto to_path = [](const std::string& utf8) {
-        return std::filesystem::path{std::u8string{utf8.begin(), utf8.end()}};
-    };
-    const auto dump_root = to_path(source);
-    const auto archive =
-        output.empty() ? FileSys::Nup::DefaultArchivePath(dump_root) : to_path(output);
-    std::signal(SIGINT, [](int) { pack_nup_cancel = true; });
+static std::filesystem::path Utf8Path(const std::string& utf8) {
+    return std::filesystem::path{std::u8string{utf8.begin(), utf8.end()}};
+}
 
+// Runs a NUP job with progress on stderr; Ctrl+C cancels it.
+static bool RunNupJob(const std::filesystem::path& result_path, const char* verb,
+                      const std::function<FileSys::Nup::PackResult(
+                          const std::function<void(const FileSys::Nup::PackProgress&)>&,
+                          std::string*)>& job) {
+    std::signal(SIGINT, [](int) { pack_nup_cancel = true; });
     const auto start = std::chrono::steady_clock::now();
     auto last_report = start;
     std::string error;
-    const auto result = FileSys::Nup::PackDump(
-        dump_root, archive, {},
+    const auto result = job(
         [&](const FileSys::Nup::PackProgress& p) {
             const auto now = std::chrono::steady_clock::now();
             if (now - last_report < std::chrono::seconds(1) && p.files_done != p.files_total) {
@@ -281,21 +281,41 @@ static bool PackNup(const std::string& source, const std::string& output) {
             fmt::print(stderr, "\r{} / {} MiB, {} / {} files", p.bytes_done >> 20,
                        p.bytes_total >> 20, p.files_done, p.files_total);
         },
-        &pack_nup_cancel, &error);
+        &error);
     const auto seconds =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     fmt::print(stderr, "\n");
     switch (result) {
     case FileSys::Nup::PackResult::Success:
-        fmt::print(stderr, "Wrote {} in {:.1f} s\n", archive.string(), seconds);
+        fmt::print(stderr, "Wrote {} in {:.1f} s\n", result_path.string(), seconds);
         return true;
     case FileSys::Nup::PackResult::Cancelled:
         fmt::print(stderr, "Cancelled\n");
         return false;
     default:
-        fmt::print(stderr, "Packing failed: {}\n", error);
+        fmt::print(stderr, "{} failed: {}\n", verb, error);
         return false;
     }
+}
+
+// eden-cli --pack-nup <dump> [<out.nup>]; the output defaults to <dump>.nup next to the dump.
+static bool PackNup(const std::string& source, const std::string& output) {
+    const auto dump_root = Utf8Path(source);
+    const auto archive =
+        output.empty() ? FileSys::Nup::DefaultArchivePath(dump_root) : Utf8Path(output);
+    return RunNupJob(archive, "Packing", [&](const auto& progress, std::string* error) {
+        return FileSys::Nup::PackDump(dump_root, archive, {}, progress, &pack_nup_cancel, error);
+    });
+}
+
+// eden-cli --extract-nup <in.nup> [<folder>]; the folder defaults to the archive's name.
+static bool ExtractNup(const std::string& source, const std::string& output) {
+    const auto archive = Utf8Path(source);
+    const auto folder =
+        output.empty() ? FileSys::Nup::DefaultExtractPath(archive) : Utf8Path(output);
+    return RunNupJob(folder, "Extracting", [&](const auto& progress, std::string* error) {
+        return FileSys::Nup::ExtractNup(archive, folder, progress, &pack_nup_cancel, error);
+    });
 }
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
@@ -350,6 +370,10 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
     if (lp.pack_nup_source) {
         return PackNup(*lp.pack_nup_source, lp.filepath) ? SDL_APP_SUCCESS : SDL_APP_FAILURE;
+    }
+    if (lp.extract_nup_source) {
+        return ExtractNup(*lp.extract_nup_source, lp.filepath) ? SDL_APP_SUCCESS
+                                                               : SDL_APP_FAILURE;
     }
 
     // Informational options already printed by ApplyLaunchParams; do not treat a
