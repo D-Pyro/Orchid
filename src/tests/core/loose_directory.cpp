@@ -14,6 +14,10 @@
 #include "core/loader/loose_directory.h"
 #include "core/loader/deconstructed_rom_directory.h"
 #include "core/file_sys/romfs.h"
+#include "core/file_sys/registered_cache.h"
+#include "core/file_sys/romfs_factory.h"
+#include "core/hle/service/filesystem/filesystem.h"
+#include "core/loader/loader.h"
 #include "qt_common/game_list/discovery.h"
 
 namespace {
@@ -184,6 +188,11 @@ TEST_CASE("Loose add-on content resolves nested extracted program data", "[loose
         LooseTestDirectory::Put(addon / "65536/base/program/0/romfs/data.bin", "payload");
         LooseTestDirectory::Put(addon / "999999_old/romfs/data.bin", "invalid");
     }
+    SECTION("patched add-on replaces its base") {
+        LooseTestDirectory::Put(addon / "0/base/program/0/romfs/data.bin", "old");
+        LooseTestDirectory::Put(addon / "0/updates/65536/program/0/romfs/data.bin", "payload");
+        LooseTestDirectory::Put(addon / "0/updates/x1/program/0/romfs/data.bin", "invalid");
+    }
     FileSys::RealVfsFilesystem vfs;
     const auto dir = vfs.OpenDirectory(exefs.string());
     const auto entries = Loader::FindLooseAOC(dir, 0x0100FF500E34A000ULL);
@@ -196,4 +205,99 @@ TEST_CASE("Loose add-on content resolves nested extracted program data", "[loose
     const auto bytes = data->ReadAllBytes();
     CHECK(std::string(bytes.begin(), bytes.end()) == "payload");
     CHECK(Loader::FindLooseAOC(dir, 0x0100123400000000ULL).empty());
+}
+
+TEST_CASE("Loose sibling programs resolve by program index", "[loose_directory]") {
+    LooseTestDirectory t;
+    const auto programs = t.root / "Game/updates/196608/program";
+    LooseTestDirectory::ExeFS(programs / "1/exefs");
+    LooseTestDirectory::Put(programs / "1/romfs/own.bin", "own");
+    LooseTestDirectory::Put(programs / "0/romfs/data.bin", "payload");
+    LooseTestDirectory::Put(programs / "2/exefs/main", "no romfs");
+    LooseTestDirectory::Put(programs / "old/romfs/data.bin", "invalid");
+    FileSys::RealVfsFilesystem vfs;
+    const auto entries =
+        Loader::FindLooseSiblingPrograms(vfs.OpenDirectory((programs / "1/exefs").string()),
+                                         0x0400453019AA8001ULL);
+    REQUIRE(entries.size() == 1);
+    CHECK(entries.front().first == 0x0400453019AA8000ULL);
+    REQUIRE(entries.front().second->GetFile("data.bin"));
+
+    FileSys::SetLooseProgramRomFS(entries);
+    CHECK(FileSys::OpenLooseProgramRomFS(0x0400453019AA8002ULL) == nullptr);
+    const auto romfs = FileSys::OpenLooseProgramRomFS(0x0400453019AA8000ULL);
+    REQUIRE(romfs);
+    CHECK(FileSys::OpenLooseProgramRomFS(0x0400453019AA8000ULL) == romfs);
+    const auto extracted = FileSys::ExtractRomFS(romfs);
+    REQUIRE(extracted);
+    const auto data = extracted->GetFile("data.bin");
+    REQUIRE(data);
+    const auto bytes = data->ReadAllBytes();
+    CHECK(std::string(bytes.begin(), bytes.end()) == "payload");
+    FileSys::SetLooseProgramRomFS({});
+    CHECK(FileSys::OpenLooseProgramRomFS(0x0400453019AA8000ULL) == nullptr);
+
+    LooseTestDirectory::ExeFS(t.root / "Flat/exefs");
+    CHECK(Loader::FindLooseSiblingPrograms(vfs.OpenDirectory((t.root / "Flat/exefs").string()),
+                                           0x0400453019AA8001ULL)
+              .empty());
+
+    // No program 0 in the dump: the running program's RomFS stands in for it.
+    const auto lone = t.root / "Lone/updates/1114112/program";
+    LooseTestDirectory::ExeFS(lone / "1/exefs");
+    LooseTestDirectory::Put(lone / "1/romfs/dummy.bin", "own");
+    const auto fallback = Loader::FindLooseSiblingPrograms(
+        vfs.OpenDirectory((lone / "1/exefs").string()), 0x0400E95004038001ULL);
+    REQUIRE(fallback.size() == 1);
+    CHECK(fallback.front().first == 0x0400E95004038000ULL);
+    CHECK(fallback.front().second->GetFile("dummy.bin"));
+
+    // A running program 0 never points at itself.
+    const auto zero = t.root / "Zero/program";
+    LooseTestDirectory::ExeFS(zero / "0/exefs");
+    LooseTestDirectory::Put(zero / "0/romfs/data.bin", "own");
+    CHECK(Loader::FindLooseSiblingPrograms(vfs.OpenDirectory((zero / "0/exefs").string()),
+                                           0x0400E95004038000ULL)
+              .empty());
+}
+
+namespace {
+struct NoRomFSLoader final : Loader::AppLoader {
+    NoRomFSLoader() : AppLoader(nullptr) {}
+    Loader::FileType GetFileType() const override {
+        return Loader::FileType::Unknown;
+    }
+    LoadResult Load(Kernel::KProcess&, Core::System&) override {
+        return {Loader::ResultStatus::ErrorNotImplemented, {}};
+    }
+};
+} // namespace
+
+TEST_CASE("RomFS factory serves loose sibling programs by program index", "[loose_directory]") {
+    LooseTestDirectory t;
+    const auto programs = t.root / "Game/program";
+    LooseTestDirectory::ExeFS(programs / "1/exefs");
+    LooseTestDirectory::Put(programs / "0/romfs/data.bin", "payload");
+    FileSys::RealVfsFilesystem vfs;
+    FileSys::SetLooseProgramRomFS(Loader::FindLooseSiblingPrograms(
+        vfs.OpenDirectory((programs / "1/exefs").string()), 0x0400453019AA8001ULL));
+
+    Core::System system;
+    NoRomFSLoader loader;
+    FileSys::ContentProviderUnion provider;
+    for (std::size_t slot = 0; slot < std::size_t(FileSys::ContentProviderUnionSlot::Count); ++slot) {
+        provider.SetSlot(FileSys::ContentProviderUnionSlot(slot), nullptr);
+    }
+    const FileSys::RomFSFactory factory{loader, provider, system.GetFileSystemController()};
+    const auto romfs = factory.OpenPatchedRomFSWithProgramIndex(
+        0x0400453019AA8001ULL, 0, FileSys::ContentRecordType::Program);
+    REQUIRE(romfs);
+    const auto extracted = FileSys::ExtractRomFS(romfs);
+    REQUIRE(extracted);
+    CHECK(extracted->GetFile("data.bin"));
+    CHECK(factory.OpenPatchedRomFSWithProgramIndex(0x0400453019AA8001ULL, 0,
+                                                   FileSys::ContentRecordType::Data) == nullptr);
+    CHECK(factory.OpenPatchedRomFSWithProgramIndex(0x0400453019AA8001ULL, 2,
+                                                   FileSys::ContentRecordType::Program) == nullptr);
+    FileSys::SetLooseProgramRomFS({});
 }
