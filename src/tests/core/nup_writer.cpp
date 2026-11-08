@@ -630,7 +630,7 @@ TEST_CASE("NUP exposes only the newest DLC RomFS for the running application", "
     REQUIRE(FileSys::Nup::PackDump(root, archive, {}, {}, nullptr, nullptr) ==
             FileSys::Nup::PackResult::Success);
     FileSys::RealVfsFilesystem real;
-    std::vector<std::pair<u64, FileSys::VirtualFile>> addons;
+    std::vector<std::pair<u64, FileSys::VirtualDir>> addons;
     {
         NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
         REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
@@ -645,13 +645,9 @@ TEST_CASE("NUP exposes only the newest DLC RomFS for the running application", "
     // Published RomFS files must retain their backing container after loader teardown.
     REQUIRE(addons.size() == 2);
     REQUIRE(addons[0].first == TitleId + 0x1001);
-    auto first = FileSys::ExtractRomFS(addons[0].second);
-    REQUIRE(first);
-    REQUIRE(Read(first->GetFile("addon.bin")) == "new addon");
+    REQUIRE(Read(addons[0].second->GetFile("addon.bin")) == "new addon");
     REQUIRE(addons[1].first == TitleId + 0x1002);
-    auto second = FileSys::ExtractRomFS(addons[1].second);
-    REQUIRE(second);
-    REQUIRE(Read(second->GetFile("second.bin")) == "second addon");
+    REQUIRE(Read(addons[1].second->GetFile("second.bin")) == "second addon");
 }
 
 TEST_CASE("NUP preserves edition control metadata and legacy DLC ownership", "[nup]") {
@@ -693,9 +689,11 @@ TEST_CASE("NUP preserves edition control metadata and legacy DLC ownership", "[n
     const auto addons = nup.GetAddonRomFS(0x0100ABCD00010000ULL);
     REQUIRE(addons.size() == 1);
     REQUIRE(addons[0].first == 0x0100ABCD00011001ULL);
-    const auto data = FileSys::ExtractRomFS(addons[0].second);
-    REQUIRE(data);
-    REQUIRE(Read(data->GetFile("addon.bin")) == "addon data");
+    REQUIRE(Read(addons[0].second->GetFile("addon.bin")) == "addon data");
+    // Without the legacy DLC base, the 0100 add-on still belongs to the 0400 edition program.
+    const auto edition_addons = nup.GetAddonRomFS(TitleId);
+    REQUIRE(edition_addons.size() == 1);
+    REQUIRE(edition_addons[0].first == TitleId + 0x1001);
     REQUIRE(StatusAfterPatch(ReadAll(archive), [](std::string& bytes_, u64 toc) {
                 const u64 meta = Le(bytes_, toc + 0x30 + 0x20, 8);
                 REQUIRE(Le(bytes_, meta, 2) == 1); // The first TLV is the NPDM.
@@ -756,15 +754,24 @@ TEST_CASE("NUP packs the preferred edition program with its family DLC", "[nup]"
     NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
     REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
     REQUIRE(nup.VerifyIntegrity({}) == Loader::ResultStatus::Success);
-    REQUIRE(nup.GetPackages().size() == 2);
+    REQUIRE(nup.GetPackages().size() == 3);
     REQUIRE(nup.GetPackages()[0].kind == NupContainer::PackageKind::Base);
     REQUIRE(nup.GetPackages()[0].title_id == native_id);
+    REQUIRE(nup.FindBasePackage() == 0);
     REQUIRE_FALSE(nup.FindBestUpdatePackage());
     REQUIRE(Read(nup.GetExeFSDir(0)->GetFile("main")) == "native program 1");
     REQUIRE(PackedTree(nup.GetRomFSDir(0)) == SourceTree(programs / "1/romfs"));
-    REQUIRE(nup.GetPackages()[1].kind == NupContainer::PackageKind::Addon);
-    REQUIRE(nup.GetPackages()[1].title_id == legacy_id + 0x1001);
-    REQUIRE(Read(nup.GetRomFSDir(1)->GetFile("addon.bin")) == "addon data");
+    // Program 0 rides along as a further base package under its program-index title ID, not
+    // the legacy ID of its NPDM.
+    REQUIRE(nup.GetPackages()[1].kind == NupContainer::PackageKind::Base);
+    REQUIRE(nup.GetPackages()[1].title_id == TitleId);
+    const auto siblings = nup.GetSiblingProgramRomFS();
+    REQUIRE(siblings.size() == 1);
+    REQUIRE(siblings[0].first == TitleId);
+    REQUIRE(Read(siblings[0].second->GetFile("legacy.bin")) == "legacy data");
+    REQUIRE(nup.GetPackages()[2].kind == NupContainer::PackageKind::Addon);
+    REQUIRE(nup.GetPackages()[2].title_id == legacy_id + 0x1001);
+    REQUIRE(Read(nup.GetRomFSDir(2)->GetFile("addon.bin")) == "addon data");
     Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
     FileSys::NACP restored;
     REQUIRE(loader.ReadControlData(restored) == Loader::ResultStatus::Success);
