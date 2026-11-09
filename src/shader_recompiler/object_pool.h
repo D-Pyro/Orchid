@@ -6,6 +6,7 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace Shader {
 
@@ -21,6 +22,12 @@ public:
         requires std::is_constructible_v<T, Args...>
     [[nodiscard]] T* Create(Args&&... args) {
         return std::construct_at(Memory(), std::forward<Args>(args)...);
+    }
+
+    /// Destroy objects and release their backing storage instead of retaining it for reuse.
+    void Free() {
+        chunks.clear();
+        node = &chunks.emplace_back(new_chunk_size);
     }
 
     void ReleaseContents() {

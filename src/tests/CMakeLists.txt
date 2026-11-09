@@ -48,6 +48,7 @@ add_executable(tests
     core/priority_queue.cpp
     core/vfs_vector.cpp
     core/internal_network/network.cpp
+    video_core/shader_object_pool.cpp
     video_core/aftermath_dump.cpp
     video_core/stall_diagnostics.cpp
     video_core/storage_buffer_pointer_tracking.cpp

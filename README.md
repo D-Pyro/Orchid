@@ -180,6 +180,8 @@ update checker; `git pull` is the update. Windows (MSVC) and macOS builds are de
 
 ## Credits
 
+- [zortos293/Lichii](https://github.com/zortos293/Lichii) (Zortos, with capy-ai): release compute IR and SPIR-V backing storage before synchronous driver compilation, adapted from [fd4ce24c9b9390e660be345b467521e7fb08dfd3](https://github.com/zortos293/Lichii/commit/fd4ce24c9b9390e660be345b467521e7fb08dfd3).
+
 Orchid takes fixes from Eglantine and its forks; after every release
 [tools/fork-scan.sh](docs/ForkScan.md) lists what they fixed since. Each ported commit names its
 source and author in its message.
