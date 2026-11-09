@@ -537,11 +537,11 @@ AppLoader_DeconstructedRomDirectory::LoadResult AppLoader_DeconstructedRomDirect
                                          : metadata.GetTitleID();
     std::vector<FileSys::BootContent> boot_content;
     if (standalone) {
-        for (auto& [id, romfs] : FindLooseAOC(dir, addon_application_id)) {
-            boot_content.push_back({id, FileSys::ContentRecordType::Data, std::move(romfs)});
+        for (auto& [id, data] : FindLooseAOC(dir, addon_application_id)) {
+            boot_content.push_back({id, FileSys::ContentRecordType::Data, std::move(data)});
         }
-        for (auto& [id, romfs] : FindLooseSiblingPrograms(dir, metadata.GetTitleID())) {
-            boot_content.push_back({id, FileSys::ContentRecordType::Program, std::move(romfs)});
+        for (auto& [id, program] : FindLooseSiblingPrograms(dir, metadata.GetTitleID())) {
+            boot_content.push_back({id, FileSys::ContentRecordType::Program, std::move(program)});
         }
     }
     FileSys::SetBootContent(std::move(boot_content));
