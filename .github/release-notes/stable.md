@@ -16,7 +16,3 @@
 ### Known issues
 
 - Xenoblade Chronicles X: the intro video can freeze, and character creation can hang on a black screen.
-
-### Validation
-
-Xenoblade Chronicles 2 (Switch 2 Edition) was checked in a handheld battle: the scene renders at the correct size. Xenoblade Chronicles: Definitive Edition (Switch 2 Edition) reaches 60 fps in the opening on Linux, AMD RX 9070 XT, Vulkan. Unit tests passed, and all seven release builds (Linux, Windows, macOS, with and without PGO) compiled. This release candidate was not tested by hand on Windows, macOS or NVIDIA.
