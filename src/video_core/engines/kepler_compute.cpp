@@ -669,7 +669,6 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
     };
     std::optional<Texture::TICEntry> input = image(0x90), output = image(0xa0);
     bool fortunes_weave = false;
-    bool compact_parameters = false;
     if (!upscale_pair(input, output)) {
         input = image(0x328);
         output = image(0x348);
@@ -678,7 +677,6 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
     if (!upscale_pair(input, output)) {
         input = image(0x60);
         output = image(0x70);
-        compact_parameters = upscale_pair(input, output);
     }
     if (!upscale_pair(input, output)) {
         input.reset();
@@ -704,7 +702,6 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
             input = image(from);
             output = image(to);
             converting = true;
-            compact_parameters = from == 0x60;
         }
     }
     if (!input || !output)
@@ -777,14 +774,20 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
         .src_x1 = static_cast<s32>(input->Width()),
         .src_y1 = static_cast<s32>(input->Height()),
     };
-    if (compact_parameters && cbuf.size.Value() >= 0x30 &&
-        launch_description.block_dim_y == 1 && launch_description.block_dim_z == 1) {
+    // Any program may lead its constants with the compact header (Donkey Kong Bananza through
+    // +0x60/+0x70, Xenoblade Chronicles 2 through the scanned slots). Handheld Xenoblade 2 upscales
+    // 1280x720 into the top-left 1920x1080 of a 3840x2160 image, and stretching it to the whole
+    // image zoomed the frame 2x.
+    {
         std::array<u32, 12> parameters{};
-        memory_manager.ReadBlock(cbuf_address, parameters.data(), sizeof(parameters));
+        const size_t words = std::min<size_t>(parameters.size(), cbuf.size.Value() / sizeof(u32));
+        memory_manager.ReadBlock(cbuf_address, parameters.data(), words * sizeof(u32));
         const auto regions = DecodeNativeUpscaleRegions(
-            parameters,
-            {launch_description.block_dim_x.Value(), launch_description.grid_dim_x.Value(),
-             launch_description.grid_dim_y.Value(), launch_description.grid_dim_z.Value()},
+            std::span{parameters}.first(words),
+            {launch_description.block_dim_x.Value(), launch_description.block_dim_y.Value(),
+             launch_description.block_dim_z.Value()},
+            {launch_description.grid_dim_x.Value(), launch_description.grid_dim_y.Value(),
+             launch_description.grid_dim_z.Value()},
             {input->Width(), input->Height()}, {output->Width(), output->Height()});
         if (regions) {
             config.src_x0 = static_cast<s32>(regions->source[0]);

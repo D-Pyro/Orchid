@@ -17,12 +17,15 @@ struct NativeUpscaleRegions {
     std::array<u32, 4> destination;
 };
 
-// The compact DLSS parameter layout has a dispatch header, followed by inclusive
-// source/destination rectangles at 0x10/0x20. Match the header before using this layout.
+// The compact DLSS parameter layout of one-dimensional thread blocks has a dispatch header,
+// followed by inclusive source/destination rectangles at 0x10/0x20. Words 1-3 repeat the grid;
+// match them before using this layout. Word 0 is not the block width: Donkey Kong Bananza stores
+// 128 with 128-thread blocks, Xenoblade Chronicles 2 stores 160 with 128-thread blocks.
 inline std::optional<NativeUpscaleRegions> DecodeNativeUpscaleRegions(
-    std::span<const u32> words, const std::array<u32, 4>& dispatch,
+    std::span<const u32> words, const std::array<u32, 3>& block, const std::array<u32, 3>& grid,
     const std::array<u32, 2>& source_size, const std::array<u32, 2>& destination_size) {
-    if (words.size() < 12 || !std::equal(dispatch.begin(), dispatch.end(), words.begin())) {
+    if (words.size() < 12 || block[1] != 1 || block[2] != 1 ||
+        !std::equal(grid.begin(), grid.end(), words.begin() + 1)) {
         return std::nullopt;
     }
     const auto rectangle = [](const u32* data, const std::array<u32, 2>& size)
