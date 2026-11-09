@@ -4,9 +4,11 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <type_traits>
@@ -177,6 +179,10 @@ private:
         }
     }
     void WaitForSpace(size_t words);
+    /// Front: blocks until the back stored `consumed` at or past target.
+    void SleepUntilConsumed(u64 target);
+    /// Back: hands ring space back and wakes a front sleeping for this position.
+    void StoreConsumed(u64 position);
     void SelectEngine(Tegra::Engines::EngineInterface* engine) {
         if (engine != front_engine) [[unlikely]] {
             SwitchEngine(engine);
@@ -222,6 +228,10 @@ private:
     alignas(128) std::atomic<u64> wait_target{~u64{0}};
     alignas(128) std::atomic<bool> back_waiting{};
     std::atomic<u32> wake{};
+    /// A position the front sleeps for (SleepUntilConsumed): the back wakes it once past it.
+    alignas(128) std::atomic<u64> front_target{~u64{0}};
+    std::mutex front_mutex;
+    std::condition_variable front_cv;
     std::jthread back_thread;
 };
 

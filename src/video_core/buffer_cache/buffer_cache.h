@@ -17,7 +17,9 @@
 #include "common/hitch_diagnostic.h"
 #include "common/range_sets.inc"
 #include "common/unmapped_read_diagnostic.h"
+#include "video_core/buffer_cache/approximate_gpu_writes.h"
 #include "video_core/buffer_cache/buffer_cache_base.h"
+#include "video_core/buffer_cache/storage_buffer_descriptor.h"
 #include "video_core/buffer_cache/storage_buffer_size.h"
 #include "video_core/buffer_cache/uniform_stream_reuse.h"
 #include "video_core/cache_tracking_diagnostics.h"
@@ -41,6 +43,7 @@ BufferCache<P>::BufferCache(Tegra::MaxwellDeviceMemoryManager& device_memory_, R
     // Ensure the first slot is used for the null buffer
     void(slot_buffers.insert(runtime, NullBufferParams{}));
     gpu_modified_ranges.Clear();
+    approx_gpu_modified_ranges.Clear();
     inline_buffer_id = NULL_BUFFER_ID;
 #ifdef YUZU_LEGACY
     immediately_free = (Settings::values.vram_usage_mode.GetValue() == Settings::VramUsageMode::Aggressive);
@@ -351,6 +354,8 @@ bool BufferCache<P>::DMACopy(GPUVAddr src_address, GPUVAddr dest_address, u64 am
     const bool has_new_downloads = tmp_intervals.size() != 0;
     for (const auto& pair : tmp_intervals) {
         gpu_modified_ranges.Add(pair.first, pair.second);
+        approx_gpu_modified_ranges.Subtract(pair.first, pair.second);
+        NoteExactGpuWrite(pair.first, pair.second);
         if (Tegra::g_nx2_ampere.load(std::memory_order_relaxed)) {
             Tegra::Nx2MarkGpuWritten(pair.first, pair.second);
             Nx2NoteListWrite(buffer_b, pair.first, pair.second);
@@ -901,6 +906,12 @@ void BufferCache<P>::PopAsyncBuffers() {
     async_buffers.pop_front();
     pending_downloads.pop_front();
     pending_download_ranges.pop_front();
+}
+
+template <class P>
+bool BufferCache<P>::IsRegionExactlyGpuModified(DAddr addr, size_t size) {
+    return VideoCommon::IsRegionExactlyGpuModified(approx_gpu_modified_ranges, gpu_modified_ranges,
+                                                   addr, size);
 }
 
 template <class P>
@@ -1688,7 +1699,9 @@ void BufferCache<P>::BindHostComputeStorageBuffers() {
         buffer.MarkUsage(offset, size);
 
         if (is_written) {
-            MarkWrittenBuffer(binding.buffer_id, binding.device_addr, size, true);
+            // Native compute (physical_size set) only has a guessed extent.
+            MarkWrittenBuffer(binding.buffer_id, binding.device_addr, size, true,
+                              binding.physical_size != 0);
         }
         if (matching && trace->binding_state == diag::BindingState::Descriptor) {
             trace->binding_state = diag::BindingState::Normal;
@@ -2042,7 +2055,8 @@ void BufferCache<P>::UpdateComputeTextureBuffers() {
 }
 
 template <class P>
-void BufferCache<P>::MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u32 size, bool needs_sync) {
+void BufferCache<P>::MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u32 size, bool needs_sync,
+                                       bool approximate) {
     if constexpr (!IS_OPENGL) {
         if (needs_sync) {
             Buffer& buffer = slot_buffers[buffer_id];
@@ -2054,6 +2068,12 @@ void BufferCache<P>::MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u3
     // from gpu_modified_ranges (the next fence downloads it instead).
     for (auto& ranges : pending_download_ranges) {
         ranges.Subtract(device_addr, size);
+    }
+    if (approximate) {
+        NoteApproximateGpuWrite(approx_gpu_modified_ranges, gpu_modified_ranges, device_addr, size);
+    } else {
+        approx_gpu_modified_ranges.Subtract(device_addr, size);
+        NoteExactGpuWrite(device_addr, size);
     }
     memory_tracker.MarkRegionAsGpuModified(device_addr, size);
     MarkVertexBuffersStale(device_addr, size);
@@ -2923,7 +2943,8 @@ Binding BufferCache<P>::StorageBufferBinding(GPUVAddr ssbo_addr, u32 cbuf_index,
                                              bool diagnostic_target) const {
     namespace diag = ComputeBindingDiagnostic;
     auto* const trace = diagnostic_target ? diag::current : nullptr;
-    const GPUVAddr gpu_addr = gpu_memory->Read<u64>(ssbo_addr);
+    const auto descriptor = ReadStorageBufferDescriptor(*gpu_memory, ssbo_addr, native_compute);
+    const GPUVAddr gpu_addr = descriptor[0];
     if (trace)
         trace->pointer = gpu_addr;
 
@@ -2942,7 +2963,7 @@ Binding BufferCache<P>::StorageBufferBinding(GPUVAddr ssbo_addr, u32 cbuf_index,
         const u64 memory_layout_size =
             native_compute ? layout_size : static_cast<u32>(layout_size);
         // Native compute pointers are bare; the next word is another shader parameter.
-        const u64 next_qword = native_compute ? 0 : gpu_memory->Read<u64>(ssbo_addr + 8);
+        const u64 next_qword = descriptor[1];
         const u32 limit = StorageBufferSizeLimit(memory_layout_size, next_qword, native_compute);
         if (native_compute && limit != 0) {
             const auto ranges = gpu_memory->GetSubmappedRange(gpu_addr, limit);

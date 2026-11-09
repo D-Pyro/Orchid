@@ -248,6 +248,10 @@ private:
 
     vk::Event wfi_event;
     u64 wfi_record_count = ~u64{}; ///< Scheduler::RecordCount() after the last wait for idle
+    // InvalidateShaderCache: the last scan found no GPU-written shader code (see there).
+    bool shader_scan_clean = false;
+    std::vector<std::pair<DAddr, u64>> shader_scan_writes;
+    std::vector<std::pair<DAddr, size_t>> shader_scan_ranges;
 
     boost::container::static_vector<u32, MAX_IMAGE_VIEWS> image_view_indices;
     std::array<VideoCommon::ImageViewId, MAX_IMAGE_VIEWS> image_view_ids;

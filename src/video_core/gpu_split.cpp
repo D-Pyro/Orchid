@@ -211,33 +211,54 @@ void GpuSplit::Drain() {
     }
     Publish();
     Nx2Profile::Scope scope{Nx2Profile::Zone::SplitDrain};
-    auto next_report = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-    for (u32 spins = 0;; ++spins) {
+    for (u32 spins = 0; spins < 16384; ++spins) {
         consumed_cache = consumed.load(std::memory_order_acquire);
         if (consumed_cache == write_position) {
             publish_every = 8;
             return;
         }
-        if (spins < 16384) {
-            Pause();
-        } else {
-            std::this_thread::yield();
-            // Still waiting on an asleep back thread: its wake-up was lost (it froze Mario Kart
-            // World on Android with the front here and the back parked). Wake it again.
-            if ((spins & 1023) == 0 && back_waiting.load(std::memory_order_seq_cst)) {
-                wake.fetch_add(1, std::memory_order_seq_cst);
-                wake.notify_all();
-            }
-            if ((spins & 1023) == 0 && std::chrono::steady_clock::now() >= next_report) {
-                next_report += std::chrono::seconds{5};
-                LOG_WARNING(HW_GPU,
-                            "GPU split drain waiting on the back thread: {} of {} words consumed, "
-                            "back {} ({})",
-                            consumed_cache, write_position,
-                            back_waiting.load() ? "parked" : "running",
-                            g_back_busy.load() ? "inside a command" : "between batches");
-            }
+        Pause();
+    }
+    SleepUntilConsumed(write_position);
+    publish_every = 8;
+}
+
+void GpuSplit::SleepUntilConsumed(u64 target) {
+    // Sleeping instead of yield-spinning: in Orbitals the front waits ~70% of the time, and
+    // spinning kept a core busy that the back (or the guest) then lost to preemption whenever the
+    // host was loaded (9x the back's involuntary switches, ~25 instead of ~33 fps).
+    // seq_cst pairs with StoreConsumed: either the back sees front_target, or this sees its store.
+    front_target.store(target, std::memory_order_seq_cst);
+    auto next_report = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    std::unique_lock lock{front_mutex};
+    while ((consumed_cache = consumed.load(std::memory_order_seq_cst)) < target) {
+        if (front_cv.wait_for(lock, std::chrono::milliseconds{1}) != std::cv_status::timeout) {
+            continue;
         }
+        // Still waiting on an asleep back thread: its wake-up was lost (it froze Mario Kart World
+        // on Android with the front here and the back parked). Wake it again.
+        if (back_waiting.load(std::memory_order_seq_cst)) {
+            wake.fetch_add(1, std::memory_order_seq_cst);
+            wake.notify_all();
+        }
+        if (std::chrono::steady_clock::now() >= next_report) {
+            next_report += std::chrono::seconds{5};
+            LOG_WARNING(HW_GPU,
+                        "GPU split drain waiting on the back thread: {} of {} words consumed, "
+                        "back {} ({})",
+                        consumed_cache, target, back_waiting.load() ? "parked" : "running",
+                        g_back_busy.load() ? "inside a command" : "between batches");
+        }
+    }
+    front_target.store(~u64{0}, std::memory_order_relaxed);
+}
+
+void GpuSplit::StoreConsumed(u64 position) {
+    consumed.store(position, std::memory_order_seq_cst);
+    if (position >= front_target.load(std::memory_order_seq_cst)) {
+        // Taking the lock orders this after the front's last look at `consumed` or before it.
+        { std::scoped_lock lock{front_mutex}; }
+        front_cv.notify_one();
     }
 }
 
@@ -249,18 +270,17 @@ bool GpuSplit::WaitForWriters() {
     }
     wait_target.store(target, std::memory_order_seq_cst);
     Publish();
-    for (u32 spins = 0;; ++spins) {
+    for (u32 spins = 0; spins < 16384; ++spins) {
         consumed_cache = consumed.load(std::memory_order_acquire);
         if (consumed_cache >= target) {
             wait_target.store(~u64{0}, std::memory_order_relaxed);
             return true;
         }
-        if (spins < 16384) {
-            Pause();
-        } else {
-            std::this_thread::yield();
-        }
+        Pause();
     }
+    SleepUntilConsumed(target);
+    wait_target.store(~u64{0}, std::memory_order_relaxed);
+    return true;
 }
 
 void GpuSplit::SwitchEngine(Tegra::Engines::EngineInterface* engine) {
@@ -404,12 +424,12 @@ void GpuSplit::BackLoop(std::stop_token stop_token) {
             if ((read_position - last_store >= 4096 ||
                  read_position >= wait_target.load(std::memory_order_relaxed)) &&
                 read_position != available) {
-                consumed.store(read_position, std::memory_order_release);
+                StoreConsumed(read_position);
                 last_store = read_position;
             }
         }
         g_back_busy.store(false, std::memory_order_release);
-        consumed.store(read_position, std::memory_order_release);
+        StoreConsumed(read_position);
     }
 }
 

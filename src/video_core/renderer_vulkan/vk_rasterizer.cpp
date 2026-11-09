@@ -1463,9 +1463,31 @@ void RasterizerVulkan::InvalidateShaderCache() {
     // not reuse metadata for the old bytes after an instruction-cache invalidate.
     // Only download and retire code ranges with pending GPU writes; ordinary cache
     // invalidations must not recompile every shader on every guest barrier.
-    const auto ranges = pipeline_cache.GetShaderCodeRanges();
+    // Guessed native compute extents (approximate_gpu_writes.h) are not shader writes.
+    auto ranges = pipeline_cache.GetShaderCodeRanges();
+    // Guests invalidate thousands of times a second. After a scan that found nothing, with the
+    // same shaders, only code an exact write noted since then can have become GPU-written.
+    bool writes_complete;
+    {
+        std::scoped_lock lock{buffer_cache.mutex};
+        writes_complete = buffer_cache.TakeExactGpuWrites(shader_scan_writes);
+    }
+    const bool incremental = shader_scan_clean && writes_complete && ranges == shader_scan_ranges;
+    bool flushed = false;
     for (const auto& [addr, size] : ranges) {
-        if (MustFlushRegion(addr, size, VideoCommon::CacheType::BufferCache)) {
+        if (incremental &&
+            std::ranges::none_of(shader_scan_writes, [addr, size](const auto& write) {
+                return write.first < addr + size && addr < write.first + write.second;
+            })) {
+            continue;
+        }
+        bool written;
+        {
+            std::scoped_lock lock{buffer_cache.mutex};
+            written = buffer_cache.IsRegionExactlyGpuModified(addr, size);
+        }
+        if (written) {
+            flushed = true;
             FlushRegion(addr, size, VideoCommon::CacheType::BufferCache);
             pipeline_cache.InvalidateRegion(addr, size);
             static u32 reports{}; // renderer thread only
@@ -1476,6 +1498,8 @@ void RasterizerVulkan::InvalidateShaderCache() {
             }
         }
     }
+    shader_scan_clean = !flushed;
+    shader_scan_ranges = std::move(ranges);
 }
 
 void RasterizerVulkan::UnmapMemory(DAddr addr, u64 size) {

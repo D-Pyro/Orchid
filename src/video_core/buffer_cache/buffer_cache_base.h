@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <utility>
 
 #include "common/container/unordered_map.h"
 #include <boost/container/static_vector.hpp>
@@ -50,6 +51,7 @@
 #include "video_core/texture_cache/types.h"
 
 namespace VideoCommon {
+
 
 using BufferId = Common::SlotId;
 
@@ -368,6 +370,17 @@ public:
     /// Return true when a CPU region is modified from the GPU
     [[nodiscard]] bool IsRegionGpuModified(DAddr addr, size_t size);
 
+    /// Like IsRegionGpuModified, ignoring bytes only guessed native compute extents cover.
+    [[nodiscard]] bool IsRegionExactlyGpuModified(DAddr addr, size_t size);
+
+    /// Moves the exact GPU writes noted since the last call into `out`. False when the log
+    /// overflowed and some were not noted (see IsRegionExactlyGpuModified).
+    bool TakeExactGpuWrites(std::vector<std::pair<DAddr, u64>>& out) {
+        out.clear();
+        std::swap(out, exact_gpu_writes);
+        return !std::exchange(exact_gpu_writes_overflow, false);
+    }
+
     /// The guest CPU reads [addr, addr + size) (pages its reads are tracked on): without
     /// AsyncBufferDownloads, GPU writes there are still copied back at fences from now on.
     void NoteCpuRead(DAddr addr, size_t size);
@@ -567,7 +580,8 @@ private:
 
     void UpdateComputeTextureBuffers();
 
-    void MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u32 size, bool needs_sync = false);
+    void MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u32 size, bool needs_sync = false,
+                           bool approximate = false);
 
     /// Counts a GPU write to the command list pages in the range (invalidating their copies) and,
     /// while collecting, asks for new copies.
@@ -730,6 +744,17 @@ private:
 
     Common::RangeSet<DAddr> read_trapped_ranges;
     Common::RangeSet<DAddr> gpu_modified_ranges;
+    // GPU-modified bytes only covered by guessed native compute extents (approximate_gpu_writes.h).
+    Common::RangeSet<DAddr> approx_gpu_modified_ranges;
+    std::vector<std::pair<DAddr, u64>> exact_gpu_writes;
+    bool exact_gpu_writes_overflow{};
+    void NoteExactGpuWrite(DAddr addr, u64 size) {
+        if (exact_gpu_writes.size() < 1024) {
+            exact_gpu_writes.emplace_back(addr, size);
+        } else {
+            exact_gpu_writes_overflow = true;
+        }
+    }
     std::deque<Common::RangeSet<DAddr>> committed_gpu_modified_ranges;
     /// Buffer pages the guest CPU reads (NoteCpuRead). Without AsyncBufferDownloads, GPU writes
     /// to them are still copied back at fences: Pokemon Pokopia builds its sky, fog and exposure

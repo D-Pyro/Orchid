@@ -532,7 +532,10 @@ bool DmaPusher::Step() {
         // billions of instances and lost the device loading a race).
         bool gpu_written =
             IsGpuWrittenCommands(dma_state.dma_get, size_t{header.size} * sizeof(u32));
-        if (!gpu_written && VideoCommon::GpuSplit::Get().Active() &&
+        // Same policy as FlushGpuWrittenCommands: once no page has been GPU-written for the first
+        // time in a while, the bits are current except for a page's very first write. Waiting
+        // here for every entry kept Orbitals' front and back taking turns (~800 waits a second).
+        if (!gpu_written && VideoCommon::GpuSplit::Get().Active() && WaitForEntryWriters() &&
             VideoCommon::GpuSplit::Get().WaitForWriters()) {
             gpu_written =
                 IsGpuWrittenCommands(dma_state.dma_get, size_t{header.size} * sizeof(u32));
@@ -1007,6 +1010,22 @@ bool DmaPusher::ReadGpuWrittenCommands(GPUVAddr address, u32 count) {
         }
         chunk = chunk_end;
     }
+    return true;
+}
+
+bool DmaPusher::WaitForEntryWriters() {
+    if (!Tegra::Nx2CheckCommandPagesFirst()) {
+        return true;
+    }
+    const u64 generation = Tegra::g_nx2_gpu_written_generation.load(std::memory_order_relaxed);
+    if (generation != entry_wait_generation) {
+        entry_wait_generation = generation;
+        entry_checks_since_mark = 0;
+    }
+    if (entry_checks_since_mark >= CommandChecksBeforeBitsFirst) {
+        return false;
+    }
+    ++entry_checks_since_mark;
     return true;
 }
 
