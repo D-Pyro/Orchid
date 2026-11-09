@@ -2,25 +2,21 @@
 > ## Report issues from inside Orchid
 > Use **Help > Report an Issue on GitHub** to open a report with your build, system, GPU, driver and recent game log. After a crash, restart Orchid first and attach the full game log from the folder it opens.
 
-## 0.9.1 — Xenoblade colours, 5.1 audio, NUP add-ons and graphics sync fixes
+## 0.9.2 — Xenoblade 2 boots, Xenoblade DE at 60 fps, Wonder flicker fix and NUP extraction
 
 ### Highlights
 
-- **Xenoblade Chronicles: Definitive Edition – Nintendo Switch 2 Edition:** textures, colours and fonts that use the classic Maxwell GOB layout are now decoded correctly. Loose dumps with nested `updates/<version>/program` and add-on folders are detected, so the game loads from an extracted folder.
-- **Switch 2 audio:** games that output six-channel (5.1) system-mix audio, such as Orbitals, are now audible instead of silent; the host sink downmixes as needed.
-- **NUP files:** updates and DLC embedded in a `.nup` show up in the game list and in the per-game add-on dialog. Android can now load NUP files and builds again.
-- **Graphics synchronization (all games, Vulkan):** guest CPU writes to GPU-written memory are no longer overwritten by older GPU downloads (fixes black/white blocks and distorted models in Yoshi and the Mysterious Book with multi-core). Texture uploads and copies now wait for every pipeline stage that uses them, and uploads to buffers already in use are ordered correctly.
-- **Linux AppImage:** uses the system Vulkan loader, so Vulkan layers such as MangoHud work.
+- **Xenoblade Chronicles 2 – Nintendo Switch 2 Edition:** boots past the startup abort (`nn::fs` 0x160A). Switch 2 processes now get a 128 GiB alias region, which the game's address allocator needs. In handheld mode the 3D scene is no longer shown zoomed in 2x.
+- **Xenoblade Chronicles: Definitive Edition – Nintendo Switch 2 Edition:** runs at 60 fps in the opening instead of 30-38. A per-game setting stops the texture readback the game does every frame from waiting on the whole GPU queue.
+- **Super Mario Bros. Wonder – Nintendo Switch 2 Edition:** scenery no longer flickers dark blue. GPU timestamps now reflect when the work was submitted, so the game stops switching to its cheaper lighting path every other frame.
+- **Switch 2 Edition dumps, one loader for every layout:** extracted folders, NSP/XCI and NUP all serve the edition's other programs and add-ons the same way. Dumps without program 0 (Xenoblade 2) get a stand-in in every format. NUP files packed with older versions must be repacked to include the sibling programs.
+- **NUP tools:** *Extract NUP* (game list context menu, `eden-cli --extract-nup`) unpacks an archive back into the folder layout, checking every file's SHA-256. *Edit NUP Metadata* changes name, icon and display version in place without repacking.
+- The Xenoblade series (1, 2, X, 3), Orbitals and the Kirby Switch 2 Edition no longer trigger the unsupported-game warning.
 
-### Mario Tennis Fever FPS setting (experimental, opt-in)
+### Known issues
 
-A per-game FPS setting for Mario Tennis Fever is available under the game's properties, together with a measured game-speed readout in the status bar. **It is highly experimental**: CPU opponents may swing without hitting the ball. The default, 60 FPS, leaves the game unpatched and behaves as in 0.9.0; only other values turn the patch on.
-
-### Fixed before release
-
-- **OpenGL:** pages with a held-back CPU write were never released, so they stopped receiving GPU readbacks and every fence did more work over time. OpenGL now ends each round of writes like Vulkan does.
-- The Tennis FPS patch no longer applies at the default 60 FPS (it did on the development builds since 0.9.0).
+- Xenoblade Chronicles X: the intro video can freeze, and character creation can hang on a black screen.
 
 ### Validation
 
-Regression A/B on Linux, NVIDIA Quadro RTX 3000 (driver 595.99), Vulkan, eden-cli, cold shader cache, 150 s each with scripted input: Mario Tennis Fever (practice match), Donkey Kong Bananza (intro), Zelda: Ocarina of Time (intro) render the same as 0.9.0, with the same frame times (within run-to-run noise) and no new errors. Xenoblade Chronicles: Definitive Edition (Switch 2 Edition) reaches its intro from an extracted folder, which 0.9.0 could not load. Unit tests: 635 test cases / 16.6 million assertions passed. The OpenGL fix was not run in a game (no headless OpenGL on the test machine); it mirrors the Vulkan code path. Windows, AMD and macOS were not tested by hand.
+Xenoblade Chronicles 2 (Switch 2 Edition) was checked in a handheld battle: the scene renders at the correct size. Xenoblade Chronicles: Definitive Edition (Switch 2 Edition) reaches 60 fps in the opening on Linux, AMD RX 9070 XT, Vulkan. Unit tests passed, and all seven release builds (Linux, Windows, macOS, with and without PGO) compiled. This release candidate was not tested by hand on Windows, macOS or NVIDIA.
