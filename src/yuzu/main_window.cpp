@@ -3768,10 +3768,13 @@ void MainWindow::ToggleShowGameName() {
 }
 
 void MainWindow::ApplyInterfaceStyle() {
-    game_list->SetModernInterface(UISettings::values.modern_interface.GetValue());
+    const bool modern = UISettings::values.modern_interface.GetValue();
+    const bool changed = modern != game_list->IsModernInterface();
+    game_list->SetModernInterface(modern);
     game_list->SetFilterVisible(ui->action_Show_Filter_Bar->isChecked());
     UpdateMenuBarVisibility();
-    if (!emulation_running) {
+    if (changed && !emulation_running) {
+        // The classic interface shows a placeholder instead of an empty list.
         OnGameListShowList(!game_list->IsEmpty());
     }
 }

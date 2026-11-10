@@ -141,7 +141,7 @@ MenuFlyout::MenuFlyout(QWidget* window) : QFrame(window) {
     layout->setContentsMargins(6, 6, 6, 6);
 
     // Long menus (View) scroll instead of leaving the window.
-    auto* scroll = new QScrollArea(this);
+    scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -157,8 +157,11 @@ MenuFlyout::MenuFlyout(QWidget* window) : QFrame(window) {
 }
 
 void MenuFlyout::Toggle(QMenu* menu, QWidget* opener_, const QPoint& global_top_left) {
-    if (isVisible() && current == menu) {
-        hide();
+    const bool close_only = isVisible() && current == menu;
+    // Also when switching to another menu: rows added to a visible panel would not count
+    // towards its size yet.
+    hide();
+    if (close_only) {
         return;
     }
     current = menu;
@@ -196,14 +199,61 @@ void MenuFlyout::hideEvent(QHideEvent* event) {
 }
 
 bool MenuFlyout::eventFilter(QObject* watched, QEvent* event) {
-    // A click anywhere else closes the panel, like a menu.
-    if (event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
+    // Events come by twice, for the window and for the widget in it.
+    if (!watched->isWidgetType()) {
+        return false;
+    }
+    switch (event->type()) {
+    case QEvent::ShortcutOverride:
+        // Escape belongs to the open panel, not to the main window's "Exit Fullscreen" hotkey.
+        if (static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+            event->accept();
+            return true;
+        }
+        return false;
+    case QEvent::KeyPress:
+        return HandleKey(static_cast<QKeyEvent*>(event)->key());
+    case QEvent::MouseButtonPress: {
+        // A click anywhere else closes the panel, like a menu.
         const auto* target = static_cast<const QWidget*>(watched);
         if (target != this && target != opener && !isAncestorOf(target)) {
             hide();
         }
+        return false;
     }
-    return QFrame::eventFilter(watched, event);
+    default:
+        return false;
+    }
+}
+
+bool MenuFlyout::HandleKey(int key) {
+    QList<NavRow*> choices = findChildren<NavRow*>();
+    choices.removeIf([](const NavRow* row) { return !row->isEnabled(); });
+    const auto count = choices.size();
+    const auto index = choices.indexOf(qobject_cast<NavRow*>(QApplication::focusWidget()));
+
+    switch (key) {
+    case Qt::Key_Escape:
+        hide();
+        return true;
+    case Qt::Key_Down:
+    case Qt::Key_Up:
+        if (count > 0) {
+            NavRow* next = choices[key == Qt::Key_Down ? (index + 1) % count
+                                                       : (index <= 0 ? count : index) - 1];
+            next->setFocus();
+            scroll->ensureWidgetVisible(next);
+        }
+        return true;
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+        if (index >= 0) {
+            choices[index]->click();
+        }
+        return true;
+    default:
+        return false;
+    }
 }
 
 void MenuFlyout::AddActions(QMenu* menu, int indent) {
@@ -246,28 +296,6 @@ void MenuFlyout::AddActions(QMenu* menu, int indent) {
             action->trigger();
         });
         rows->addWidget(row);
-    }
-}
-
-void MenuFlyout::keyPressEvent(QKeyEvent* event) {
-    switch (event->key()) {
-    case Qt::Key_Escape:
-        hide();
-        break;
-    case Qt::Key_Down:
-        focusNextChild();
-        break;
-    case Qt::Key_Up:
-        focusPreviousChild();
-        break;
-    case Qt::Key_Return:
-    case Qt::Key_Enter:
-        if (auto* row = qobject_cast<NavRow*>(focusWidget())) {
-            row->click();
-        }
-        break;
-    default:
-        QFrame::keyPressEvent(event);
     }
 }
 

@@ -98,15 +98,18 @@ QPushButton* Widget::CreateRestoreGlobalButton(bool using_global, QWidget* paren
 QLabel* Widget::CreateLabel(const QString& text) {
     QLabel* qt_label = new QLabel(text, this->parent);
     qt_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    if (!row_description.isEmpty()) {
-        // The label stands above its description here, so it loses the "Label:" colon.
+    if (UISettings::values.modern_interface.GetValue()) {
+        // The modern row has the label above its description, without the "Label:" colon.
         const QString title = text.endsWith(QLatin1Char(':')) ? text.chopped(1) : text;
-        qt_label->setWordWrap(true);
-        qt_label->setText(
-            QStringLiteral("%1<br><span style=\"font-size: 9.5pt; color: %2;\">%3</span>")
-                .arg(title.toHtmlEscaped(), ModernTheme::Current().muted.name(),
-                     row_description.toHtmlEscaped()));
-        row_label = qt_label;
+        qt_label->setText(title);
+        if (!row_description.isEmpty()) {
+            qt_label->setWordWrap(true);
+            qt_label->setText(
+                QStringLiteral("%1<br><span style=\"font-size: 9.5pt; color: %2;\">%3</span>")
+                    .arg(title.toHtmlEscaped(), ModernTheme::Current().muted.name(),
+                         row_description.toHtmlEscaped()));
+            row_label = qt_label;
+        }
     }
     return qt_label;
 }

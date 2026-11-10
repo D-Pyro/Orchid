@@ -13,6 +13,7 @@ class QAction;
 class QLabel;
 class QMainWindow;
 class QMenu;
+class QScrollArea;
 class QVBoxLayout;
 
 /// One line of a list: text left, optional mono text right, optional check mark column.
@@ -59,12 +60,14 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
-    void keyPressEvent(QKeyEvent* event) override;
     void hideEvent(QHideEvent* event) override;
 
 private:
     void AddActions(QMenu* menu, int indent);
+    /// Escape, arrow keys and Enter while the panel is open. Returns whether it used the key.
+    bool HandleKey(int key);
 
+    QScrollArea* scroll;
     QVBoxLayout* rows;
     QMenu* current = nullptr;
     /// The button that opened the panel; clicking it again closes it.

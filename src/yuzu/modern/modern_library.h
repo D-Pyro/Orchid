@@ -22,7 +22,6 @@ class QPushButton;
 class QScrollArea;
 class QStackedWidget;
 class QStandardItemModel;
-class QVBoxLayout;
 
 namespace Core {
 class System;
@@ -56,6 +55,7 @@ public:
     }
 
 protected:
+    bool event(QEvent* event) override;
     bool eventFilter(QObject* object, QEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;

@@ -625,6 +625,17 @@ int ModernLibrary::ExecSettings(QDialog* dialog) {
     return dialog->result();
 }
 
+bool ModernLibrary::event(QEvent* event) {
+    // Escape closes the settings page as it closes the dialog. Claiming it here keeps the
+    // "Exit Fullscreen" hotkey of the main window from taking the key first.
+    if (event->type() == QEvent::ShortcutOverride && settings_dialog &&
+        static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+        event->accept();
+        return true;
+    }
+    return QWidget::event(event);
+}
+
 bool ModernLibrary::eventFilter(QObject* object, QEvent* event) {
     if (object == shelf && event->type() == QEvent::KeyPress) {
         const int key = static_cast<QKeyEvent*>(event)->key();

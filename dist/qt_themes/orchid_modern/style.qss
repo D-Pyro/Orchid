@@ -341,6 +341,7 @@ QSlider::handle:horizontal {
     margin: -6px 0;
     border-radius: 8px;
     background-color: #ffffff;
+    border: 1px solid @muted@;
 }
 
 /* Groups are cards with the title above */
