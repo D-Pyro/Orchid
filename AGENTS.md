@@ -163,8 +163,23 @@ Eigenen Emulator nach dem Test beenden.
 
 - Der Laptop (`leon@192.168.150.206`, Tailscale `100.111.165.26`) führt keine Emulator-Tests
   mehr aus. Die alte `.126` ist ungültig.
-- Sound und Performance bewertet Leon weiter selbst, solange er da ist (siehe CLAUDE.md):
-  dann keine eigenen Läufe, nur bauen und einen Testbuild mit Shortcut übergeben.
+- Performance und Sound testet der Agent selbst am PC, auch wenn Leon zu Hause ist
+  (Leon 2026-11-10). Kurze Läufe, danach Emulator beenden.
+- **Sound prüfen (Aussetzer = Lücken in der Wellenform):** Spiel mit `PULSE_SINK=orchid_test`
+  starten, damit nichts aus Leons Lautsprechern kommt und nur der Emulator aufgenommen wird:
+  ```sh
+  M=$(pactl load-module module-null-sink sink_name=orchid_test)
+  parec -d orchid_test.monitor --file-format=wav rec.wav &   # vor dem Spielstart, danach kill
+  # ... PULSE_SINK=orchid_test agent-run ./build/bin/orchid -g <game> ...
+  ffmpeg -hide_banner -i rec.wav -af silencedetect=n=-60dB:d=0.02 -f null - 2>&1 | grep silence_
+  pactl unload-module $M
+  ```
+  Jede Stille ab 20 ms mitten in durchgehender Musik/Effekten ist ein Aussetzer (Underrun).
+  Stille am Anfang, an Ladebildschirmen und in echten Spielpausen ist normal: immer gegen
+  einen Baseline-Lauf (letztes gutes Build, gleiche Szene) vergleichen und zusätzlich das
+  Emulator-Log auf Audio-Underruns prüfen. Das findet Lücken, nicht falsche Tonhöhe, Tempo
+  oder fehlende Instrumente; dafür Spektrogramm/Länge gegen die Baseline vergleichen.
+  Die Methode wurde mit einem Testton mit eingefügter 80-ms-Lücke verifiziert, noch nicht mit Orchid.
 - **Builds verteilen:** Ist der Laptop gerade frei (kein `orchid`/`eden-cli`, kein anderer Build),
   darf dort kompiliert werden, um den PC zu entlasten. Prüfen z.B. mit
   `ssh leon@100.111.165.26 'pgrep -x orchid || pgrep -x eden-cli || pgrep -x ninja'` (keine Ausgabe = frei).
