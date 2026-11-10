@@ -973,6 +973,81 @@ TEST_CASE("NUP extracts every package and repacks to the same archive", "[nup]")
     REQUIRE(ReadAll(repacked) == ReadAll(archive));
 }
 
+TEST_CASE("NUP extracts a multi-program archive into program folders and repacks it", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root); // A legacy base and updates must not override the edition program.
+    constexpr u64 legacy_id = 0x0100ABCD00010000ULL;
+    constexpr u64 native_id = TitleId + 1;
+    const auto programs = root / "upgrade/65536/program";
+    Put(programs / "0/exefs/main", "legacy program 0");
+    Put(programs / "0/exefs/main.npdm", Npdm(legacy_id));
+    Put(programs / "0/romfs/legacy.bin", "legacy data");
+    Put(programs / "1/exefs/main", "native program 1");
+    Put(programs / "1/exefs/main.npdm", NativeNpdm(native_id));
+    Put(programs / "1/romfs/Empty", "");
+    fs::rename(root / "dlc/0400ABCD00011001", root / "dlc/0100ABCD00011001");
+
+    FileSys::NACP legacy;
+    const std::string legacy_name = "Legacy game";
+    std::copy(legacy_name.begin(), legacy_name.end(),
+              legacy.raw.language_entries.language_entries[0].application_name.begin());
+    const auto legacy_bytes = legacy.GetRawBytes();
+    Put(programs / "1/control/control.nacp",
+        std::string_view{reinterpret_cast<const char*>(legacy_bytes.data()), legacy_bytes.size()});
+    FileSys::NACP edition;
+    const std::string name = "Native edition";
+    std::copy(name.begin(), name.end(),
+              edition.raw.language_entries.language_entries[0].application_name.begin());
+    const std::string version = "2.3.4";
+    std::copy(version.begin(), version.end(), edition.raw.version_string.begin());
+    edition.raw.save_data_owner_id = legacy_id;
+    edition.raw.dlc_base_title_id = legacy_id + 0x1000;
+    edition.raw.program_index = 1;
+    edition.raw.initial_program_index = 1;
+    edition.raw.acd_index = 1;
+    edition.raw.apparent_platform = FileSys::ApparentPlatform::Ounce;
+    const auto edition_bytes = edition.GetRawBytes();
+    Put(programs / "1/control/Acd_1/control.nacp",
+        std::string_view{reinterpret_cast<const char*>(edition_bytes.data()), edition_bytes.size()});
+
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+
+    // The repacked archive records its folder name, so extract into one of the same name.
+    const auto output = t.path / "out" / "Game";
+    std::string error;
+    const auto extracted = FileSys::Nup::ExtractNup(archive, output, {}, nullptr, &error);
+    INFO(error);
+    REQUIRE(extracted == FileSys::Nup::PackResult::Success);
+
+    // Each program lands under its index; there is no single "base".
+    REQUIRE_FALSE(fs::exists(output / "base"));
+    REQUIRE(ReadAll(output / "program/1/exefs/main") == "native program 1");
+    REQUIRE(ReadAll(output / "program/0/exefs/main") == "legacy program 0");
+    REQUIRE(ReadAll(output / "program/0/romfs/legacy.bin") == "legacy data");
+    REQUIRE(SourceTree(output / "dlc/0100ABCD00011001/0") ==
+            SourceTree(root / "dlc/0100ABCD00011001/0"));
+
+    // The extracted folder packs to the same packages again.
+    const auto repacked = t.path / "out" / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(output, repacked) == FileSys::Nup::PackResult::Success);
+    FileSys::RealVfsFilesystem real;
+    NupContainer first{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    NupContainer second{real.OpenFile(repacked.string(), FileSys::OpenMode::Read)};
+    REQUIRE(second.GetStatus() == Loader::ResultStatus::Success);
+    REQUIRE(second.GetPackages().size() == first.GetPackages().size());
+    for (size_t i = 0; i < first.GetPackages().size(); ++i) {
+        INFO("package " << i);
+        REQUIRE(second.GetPackages()[i].kind == first.GetPackages()[i].kind);
+        REQUIRE(second.GetPackages()[i].title_id == first.GetPackages()[i].title_id);
+        REQUIRE(second.GetPackages()[i].version == first.GetPackages()[i].version);
+        REQUIRE(PackedTree(second.GetExeFSDir(i)) == PackedTree(first.GetExeFSDir(i)));
+        REQUIRE(PackedTree(second.GetRomFSDir(i)) == PackedTree(first.GetRomFSDir(i)));
+    }
+    REQUIRE(ReadAll(repacked) == ReadAll(archive));
+}
+
 TEST_CASE("NUP extraction refuses a used folder and cleans up after damage", "[nup]") {
     TempDir t;
     const auto root = t.path / "Game";
