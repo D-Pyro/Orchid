@@ -46,8 +46,11 @@ public:
             const s64 target = s64{index} * 16 + 16 + relative;
             if (target < 0 || target % 16 || target >= MaximumInstructions * 16)
                 return Result::InvalidTarget;
-            const bool noinc_call = opcode == 0x944 && (instruction.words[2] & 0x400000) != 0;
-            if (opcode == 0x944 && !noinc_call) {
+            // A predicated CALL.REL.NOINC is a loop-exit jump inside the program. Unpredicated it is
+            // the real call the lowering verifies, with its function behind the main EXIT.
+            const bool noinc_jump = opcode == 0x944 && (instruction.words[2] & 0x400000) != 0 &&
+                                    instruction.words[0] != 0x7944;
+            if (opcode == 0x944 && !noinc_jump) {
                 last_call_target = std::max(last_call_target, static_cast<u32>(target / 16));
             } else {
                 last_forward_target = std::max(last_forward_target, static_cast<u32>(target / 16));
@@ -57,8 +60,8 @@ public:
             if (opcode == 0x947 && computed_branch && instruction.Bits(12, 4) == 7 &&
                 target == s64{index} * 16)
                 return Result::Complete;
-            // A closing self-branch past every branch target also ends programs whose RET pairs
-            // with a CALL.REL.NOINC, which the EXIT/RET rules below can't see. Only taken when the
+            // A closing self-branch past every branch target also ends programs whose end the
+            // EXIT/RET rules below can't see. Only taken when the
             // capture then runs into an invalid branch (FallbackEnd); ending every capture there
             // broke Donkey Kong Bananza's level loading.
             if (opcode == 0x947 && instruction.Bits(12, 4) == 7 && instruction.Bits(87, 4) == 7 &&

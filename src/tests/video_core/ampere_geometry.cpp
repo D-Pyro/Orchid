@@ -333,4 +333,31 @@ TEST_CASE("Ampere capture falls back to the closing self-branch before an invali
     REQUIRE(forward.FallbackEnd() == 0);
 }
 
+TEST_CASE("Ampere capture ends at the library RET behind an unpredicated CALL.REL.NOINC",
+          "[video_core][ampere]") {
+    // Not earlier (at the library's own EXIT) and not later (in the next program in memory, where
+    // Orbitals' bindless handle proof then refused valid vertex shaders).
+    const auto end = [](std::span<const Instruction> code) {
+        ProgramCaptureState capture;
+        for (u32 index = 0; index < code.size(); ++index) {
+            if (capture.Observe(code[index], index) == ProgramCaptureState::Result::Complete)
+                return index + 1;
+        }
+        return 0U;
+    };
+    REQUIRE(end(TerminalFloatTailProgram) == TerminalFloatTailProgram.size());
+    REQUIRE(end(LibraryFloatTailProgram) == LibraryFloatTailProgram.size());
+    // The predicated form stays a jump: its target is no function, so the EXIT there ends it.
+    constexpr std::array<Instruction, 3> loop{{
+        {{0x00003944, 16, 0x03c00000, 0}},
+        {{0x00007947, 0xffffffe0, 0x0383ffff, 0}},
+        {{0x0000794d, 0, 0x03800000, 0}},
+    }};
+    REQUIRE(end(loop) == loop.size());
+    // Without NOINC it is a call whatever its predicate: the EXIT then only ends the main program.
+    auto call = loop;
+    call[0].words[2] = 0x03800000;
+    REQUIRE(end(call) == 0);
+}
+
 } // namespace
