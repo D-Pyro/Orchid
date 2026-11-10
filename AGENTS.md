@@ -153,25 +153,20 @@ der Agent selbst auf, ohne Rückfrage (Leon 2026-11-08). Gilt für Worktrees unt
 - Nicht anfassen: Haupt-Checkout `~/src/Eglantine` und dessen `build/`, Worktrees fremder Repos
   (z.B. `~/Development/Eglantine-Official`, Djihads80), den eigenen laufenden Worktree.
 
-## Orchid: Harness-Tests auf dem Laptop, Builds zwischen PC und Laptop verteilen
+## Orchid: alle Emulator-Tests laufen auf dem PC
 
-**Adresskorrektur von Leon (2026-11-09):** Laptop-LAN für alle Orchid-Tests ist
-`leon@192.168.150.206`. Die alte `.126` in früheren Aufträgen/Supportnotizen
-ist ungültig; stattdessen `.206` verwenden.
+Gilt für alle Orchid-Agents und Subagents (Leon 2026-11-10). Jeder Test, der den
+Emulator startet (Performance-/fps-Messungen, headless Boots, Repro-Läufe, A/B-Vergleiche,
+Screenshots, Logs), läuft auf dem **PC** (RX 9070 XT), nicht auf dem Laptop. Dort immer
+per `agent-run` starten (z.B. `agent-run ./build/bin/orchid -g <game>`), MCP `orchid` macht das schon.
+Eigenen Emulator nach dem Test beenden.
 
-Gilt für alle Orchid-Agents und Subagents (Leon 2026-11-08).
-
-- **Tests:** Alles, was Leon nicht selbst testen muss (Sound/Performance bewertet er weiter selbst,
-  siehe CLAUDE.md), aber über den Harness geht (headless Boots, Repro-Läufe, A/B-Vergleiche,
-  Screenshots, Logs), läuft auf dem **Laptop** (`ssh leon@100.111.165.26`), nicht am PC.
-  Kit: `~/orchid-test/relrun.sh <build> <tag> <game> <secs> [keys]`, Spiele in `~/Switch2`,
-  Ausgabe `~/orchid-test/out/rel/`, Log `data/eden/log/orchid_log.txt`.
-  GPU-Lock `~/orchid-issue-tests/locks/gpu.lock` (Xvfb mit `9>&-` starten). Kein OpenGL dort, nur Vulkan.
-  Nur wenn der Laptop nicht erreichbar ist oder der Test PC-Hardware braucht (RX 9070 XT/RADV-spezifisch,
-  Desktop), am PC testen — und dann per `agent-run`.
-- **Builds verteilen:** Ist der Laptop gerade frei von Tests (GPU-Lock frei, kein `orchid`/`eden-cli`
-  läuft), dort kompilieren, damit der PC entlastet ist; laufen dort Tests, am PC bauen
-  (`build-scope`/`agent-run` wie gehabt). Prüfen z.B. mit
-  `ssh leon@100.111.165.26 'flock -n ~/orchid-issue-tests/locks/gpu.lock true && ! pgrep -x orchid && ! pgrep -x eden-cli'`.
-  Pro Maschine nur ein voller Build gleichzeitig. Testbuilds für Leon (Shortcuts) müssen am Ende
-  am PC liegen: Laptop-Binary/AppImage per `scp` holen und `ldd` prüfen, oder dort am PC bauen.
+- Der Laptop (`leon@192.168.150.206`, Tailscale `100.111.165.26`) führt keine Emulator-Tests
+  mehr aus. Die alte `.126` ist ungültig.
+- Sound und Performance bewertet Leon weiter selbst, solange er da ist (siehe CLAUDE.md):
+  dann keine eigenen Läufe, nur bauen und einen Testbuild mit Shortcut übergeben.
+- **Builds verteilen:** Ist der Laptop gerade frei (kein `orchid`/`eden-cli`, kein anderer Build),
+  darf dort kompiliert werden, um den PC zu entlasten. Prüfen z.B. mit
+  `ssh leon@100.111.165.26 'pgrep -x orchid || pgrep -x eden-cli || pgrep -x ninja'` (keine Ausgabe = frei).
+  Pro Maschine nur ein voller Build gleichzeitig; sonst am PC bauen (`build-scope`/`agent-run`).
+  Das fertige Binary oder AppImage per `scp` auf den PC holen und mit `ldd` prüfen.
