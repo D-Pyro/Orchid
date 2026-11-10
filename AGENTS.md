@@ -182,27 +182,22 @@ not use the default `low`; it is clearly weaker at computer use.
   theirs with deleted run directories and must be recorded again before use
   (`mtf-title-menu-v1`, `pokopia-cave-walking-v1`, `air-startup-loading-v1`, both `hw-*`).
 
-### Mario Tennis Fever regression gate: play a Free Play match
+### Gameplay gate: only before a release or a PR
 
-The gate before pushing emulator changes (after tests pass, fork-scan ports, perf or graphics
-changes) is a real match, not the main menu. Do not use the title/main-menu smoke
-(`mtf-title-smoke-v1`) as the gate any more; it only proves the game boots.
+Before starting a release build and before opening or pushing a pull request, boot every game
+listed under "Project scope" in `README.md` once and play it briefly into real gameplay (not the
+title or main menu). Plain commits and pushes to `main` need no gate, including commits the
+maintainer makes by hand.
 
-- Start Mario Tennis Fever, go to Free Play, Singles, Quick Play (7 points), Stadium Court
-  (Grass), Mario against a CPU opponent, and play several points (serves, rallies, point
-  transitions). The saved route `mtf-mario-yoshi-stadium-match-v1` (`route_play` in the `orchid`
-  MCP, 47 steps) does this when the session was booted with
-  `snapshot="mtf-after-first-practice-20261107"`; re-record it if the game binding no longer
-  matches. About five minutes in total.
-- Pass only if all of this holds: both players, court, crowd, effects and scoreboard render;
-  text has no missing glyphs; the match runs through a point change without a hang, crash or
-  device loss; the log shows no new errors compared with the last good build; and the native
-  cadence is in the range of the last good run (`docs/performance/mtf-stadium-match-20261107.json`:
-  mean about 16.7 ms, p99 about 22 ms). The opponent is random, so this is a regression check,
-  not an A/B measurement; use `orchid-test-run` for numbers.
-- The Terra subagent runs it (see above) and returns screenshots, log excerpts and cadence
-  numbers. The main agent looks at the key screenshots and decides pass or fail.
-- Fail means: do not push; find the regression, fix it, run the gate again.
+- Per game: boot, reach gameplay (saved route from the table above where one exists, otherwise
+  by hand), play about a minute, take screenshots, stop. Skip a game only if it is not on the PC
+  or is known not to reach gameplay yet (README table); name every skipped game in the result.
+- Pass if each game renders correctly (characters, world, HUD, text without missing glyphs), runs
+  without hang, crash or device loss, and its log shows no new errors compared with the last good
+  build. A game that worked in the last good build and fails now blocks the release or PR.
+- The Terra subagent runs it (see above) and returns screenshots and log excerpts. The main agent
+  looks at the key screenshots and decides pass or fail.
+- Fail means: no release or PR; find the regression, fix it, run the gate again.
 
 ### Performance measurements
 
