@@ -69,6 +69,8 @@ Applies to the main checkout, all its worktrees (also under `~/.t3/worktrees/` a
 (including automatic issue, review/merge and fork-scan runs). Machine addresses and the
 maintainer's own rules live in the maintainer's private `~/.claude/CLAUDE.md`, not here.
 
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
+
 ## Mutation check is part of the final verification
 
 When production code or unit tests change, run the mutation check yourself as a mandatory part of
@@ -110,6 +112,26 @@ runs performance and sound tests itself even while the maintainer is at home. St
 with `agent-run` (the `orchid` MCP does this already), keep runs short, and end the emulator
 afterwards. The laptop runs no emulator tests; it may only compile (see below). The maintainer
 tests only the final build before a release.
+
+### Test runs are done by a Terra subagent
+
+Routine test runs (boot a game, drive the `orchid` MCP, `orchid-test-run`, screenshots, sound
+recordings, collecting logs, CSV and `summary.txt`) go to a subagent on GPT-6.1 Terra
+(`gpt-6.1-terra`) at reasoning effort `medium`, started with `delegate_task` on the Codex
+provider. This runs on the maintainer's ChatGPT subscription and spares the Claude limits. Do
+not use the default `low`; it is clearly weaker at computer use.
+
+- The main agent (Fable or Opus) writes the brief up front: game, scene, exact steps, what to
+  record, and the return format (file paths, raw numbers, screenshot paths).
+- The subagent returns data only. Decisions stay with the main agent: regression or not, root
+  cause, code changes, whether to ship. When a screenshot decides the outcome, look at it
+  yourself.
+- All rules in this file still apply to the subagent run (`agent-run`, `orchid-test-run` for
+  performance numbers, short runs, end the emulator afterwards).
+- Basis (2026-11-10): 21 Orchid screenshots classified by scene type (gameplay, cutscene, menu,
+  loading, title, black screen, error dialog): Terra `medium` 21/21, Haiku 5.5 21/21. That test
+  did not cover subtle rendering artifacts or reading small status-bar text; check those
+  yourself until a harder test says otherwise.
 
 ### Performance measurements
 
