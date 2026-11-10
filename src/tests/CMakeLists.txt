@@ -50,6 +50,7 @@ add_executable(tests
     core/loose_directory.cpp
     core/priority_queue.cpp
     core/vfs_vector.cpp
+    core/vfs_real.cpp
     core/internal_network/network.cpp
     video_core/shader_object_pool.cpp
     video_core/aftermath_dump.cpp
