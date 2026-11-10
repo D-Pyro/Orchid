@@ -209,6 +209,11 @@ QStringList extractDir(QuaZip& zip, const QString& dir, QtCommon::QtProgressCall
         QString absCleanPath = QDir::cleanPath(absFilePath);
         if (!absCleanPath.startsWith(absCleanDir))
             continue;
+        // A link's target comes from the archive and can point anywhere; later entries would
+        // then be written through it, outside the output folder. Nothing we unpack needs links.
+        QuaZipFileInfo64 entry;
+        if (zip.getCurrentFileInfo(&entry) && entry.isSymbolicLink())
+            continue;
         if (!extractFile(&zip, QLatin1String(""), absFilePath, total, progress, callback)) {
             removeFile(extracted);
             return QStringList();
@@ -265,11 +270,6 @@ bool extractFile(QuaZip* zip, QString fileName, QString fileDest, std::size_t to
             QFile(fileDest).setPermissions(srcPerm);
         }
         return true;
-    }
-
-    if (info.isSymbolicLink()) {
-        QString target = QFile::decodeName(inFile.readAll());
-        return QFile::link(target, fileDest);
     }
 
     // Open resulting file

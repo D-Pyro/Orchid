@@ -3,8 +3,8 @@
 
 #include <filesystem>
 #include <system_error>
-#include <JlCompress.h>
 #include "frontend_common/mod_manager.h"
+#include "compress.h"
 #include "mod.h"
 #include "qt_common/abstract/frontend.h"
 
@@ -132,10 +132,9 @@ const QString ExtractMod(const QString& path) {
 
     QString qCacheDir = QString::fromStdString(tmp.string());
 
-    QFile zip{path};
-
-    // TODO(crueter): use QtCompress
-    QStringList result = JlCompress::extractDir(&zip, qCacheDir);
+    // The zip library's own extract helper creates symbolic links from archive entries.
+    QStringList result = QtCommon::Compress::extractDir(
+        path, qCacheDir, [](std::size_t, std::size_t) { return true; });
     if (result.isEmpty()) {
         QtCommon::Frontend::Critical(tr("Mod Extract Failed"),
                                      tr("Zip file %1 is empty").arg(path));
