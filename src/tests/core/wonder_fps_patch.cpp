@@ -37,7 +37,7 @@ TEST_CASE("Wonder FPS patch keeps simulation and presentation together", "[wonde
         }
         CHECK(((ReadWord(module, 0) >> 5) & 0xffff) == fps_values[i]);
         CHECK(((ReadWord(module, 2) >> 5) & 0xffff) == fps_values[i]);
-        CHECK(((ReadWord(module, 1) >> 5) & 0xffff) == (fps_values[i] == 30 ? 2 : 1));
+        CHECK(((ReadWord(module, 1) >> 5) & 0xffff) == (fps_values[i] == 30 ? 2U : 1U));
     }
 }
 
