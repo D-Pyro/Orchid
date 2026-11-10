@@ -22,7 +22,7 @@ System frame-work CSV inverse means are not display FPS. Keep diagnostic perf,
 RenderDoc and verbose traces separate from timed runs. Record sample failures.
 Profile the heaviest reproducible scene, rank measured costs, change one cause,
 and repeat. Promote only gains beyond run spread that repeat and pass graphics,
-regression tests and the Tennis Free Play match gate. Do not turn missing measurements
+regression tests (gameplay gate per `AGENTS.md` before a release or PR). Do not turn missing measurements
 into zeros or use menu frame rates as gameplay results.
 
 If blocked, retain evidence, reason and concrete next action here and move to

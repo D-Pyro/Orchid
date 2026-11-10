@@ -14,7 +14,7 @@ their fixes.
 3. A commit looked at and turned down goes into `.github/fork-scan-skip` as `<hash> <reason>`, so
    later scans leave it out.
 4. Name the fork and what came from it under Credits in `README.md`.
-5. Build, run the tests and the Mario Tennis Fever Free Play match gate (see `AGENTS.md`), push to `main`, close the issue
+5. Build, run the tests, push to `main`, close the issue
    with a list of what was ported. The next release ships it.
 
 Roots are listed at the top of the script: zortos293/Eglantine and Djihads80/Eglantine (each with
