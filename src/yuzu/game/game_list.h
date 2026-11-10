@@ -38,8 +38,11 @@ enum class AmLaunchType;
 enum class StartGameType;
 
 class GameCarousel;
+class GameDetails;
+class ModernLibrary;
 
 class QAbstractItemView;
+class QDialog;
 namespace Core {
 class System;
 }
@@ -87,6 +90,18 @@ public:
     void UnloadController();
 
     void ResetViewMode();
+
+    /// Starts a game the way activating its entry does.
+    void LaunchGame(const QString& file_path, u64 title_id);
+
+    /// Swaps the classic list for the modern interface (sidebar, library, game details).
+    void SetModernInterface(bool modern);
+    bool IsModernInterface() const {
+        return m_modern;
+    }
+    /// Modern interface: runs the settings dialog as a page of the window, like QDialog::exec.
+    int ExecSettingsPage(QDialog* dialog);
+    bool IsSettingsPageOpen() const;
 
 public slots:
     void SetNupConversionRunning(bool running);
@@ -146,6 +161,9 @@ private:
     void RetranslateUI();
 
     friend class GameListSearchField;
+    // The modern interface reuses the directory menus, favorites and action signals.
+    friend class GameDetails;
+    friend class ModernLibrary;
 
     std::shared_ptr<FileSys::VfsFilesystem> vfs;
     FileSys::ManualContentProvider* provider;
@@ -156,6 +174,8 @@ private:
     GameTree* tree_view = nullptr;
     GameGrid* grid_view = nullptr;
     GameCarousel* carousel_view = nullptr;
+    ModernLibrary* modern_view = nullptr;
+    bool m_modern = false;
     GameListModel* item_model = nullptr;
     Settings::GameListMode game_list_mode;
 

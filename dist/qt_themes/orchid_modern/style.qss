@@ -1,0 +1,554 @@
+/*
+ * SPDX-FileCopyrightText: Copyright 2026 Orchid Emulator Project
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Modern interface. One sheet for dark and light: ModernTheme::StyleSheet() replaces the
+ * @token@ names with the current colours and @img@ with the folder of the rendered images.
+ * It is appended to the default sheet, so the controller and keyboard styles from there stay.
+ */
+
+QMainWindow, QDialog {
+    background-color: @bg@;
+}
+
+QWidget {
+    color: @text@;
+}
+
+QWidget:disabled {
+    color: @dim@;
+}
+
+QToolTip {
+    background-color: @pop@;
+    color: @text@;
+    border: 1px solid @line@;
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+/* Menu bar (shown while a game runs) and menus */
+
+QMenuBar {
+    background-color: @side@;
+    border-bottom: 1px solid @line@;
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+QMenuBar::item:selected {
+    background-color: @hover@;
+}
+
+QMenu {
+    background-color: @pop@;
+    border: 1px solid @line@;
+    border-radius: 10px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 7px 24px 7px 22px;
+    border-radius: 7px;
+}
+
+QMenu::item:selected {
+    background-color: @hover@;
+}
+
+QMenu::item:disabled {
+    color: @dim@;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: @line@;
+    margin: 5px 6px;
+}
+
+/* Status bar */
+
+QStatusBar {
+    background-color: @bg@;
+    border-top: 1px solid @line@;
+    min-height: 30px;
+}
+
+QStatusBar::item {
+    border: none;
+}
+
+QStatusBar QLabel {
+    color: @muted@;
+    font-family: "@mono@";
+    font-size: 11px;
+}
+
+QStatusBar QPushButton {
+    font-family: "@mono@";
+    font-size: 11px;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    padding: 2px 8px;
+    min-height: 0;
+}
+
+QStatusBar QPushButton:hover {
+    background-color: @hover@;
+}
+
+/* Buttons */
+
+QPushButton {
+    background-color: @hover@;
+    border: 1px solid @line@;
+    border-radius: 9px;
+    padding: 5px 10px;
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background-color: @surf2@;
+}
+
+QPushButton:pressed {
+    background-color: @line@;
+}
+
+QPushButton:checked {
+    background-color: @accentSoft@;
+    border-color: @accent@;
+}
+
+QPushButton:default {
+    background-color: @accent@;
+    color: @accentInk@;
+    border: none;
+}
+
+QPushButton:disabled {
+    color: @dim@;
+}
+
+QToolButton {
+    background-color: @hover@;
+    border: 1px solid @line@;
+    border-radius: 9px;
+    padding: 5px 10px;
+}
+
+QToolButton:hover {
+    background-color: @surf2@;
+}
+
+QPushButton[modern="primary"] {
+    background-color: @accent@;
+    color: @accentInk@;
+    border: none;
+    border-radius: 11px;
+    padding: 0 28px;
+    min-height: 46px;
+}
+
+QPushButton[modern="primary"]:hover {
+    background-color: @accent@;
+    border: 1px solid @text@;
+}
+
+QPushButton[modern="primaryLeft"] {
+    background-color: @accent@;
+    color: @accentInk@;
+    border: none;
+    border-top-left-radius: 11px;
+    border-bottom-left-radius: 11px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 0 24px;
+    min-height: 46px;
+}
+
+QPushButton[modern="primaryRight"] {
+    background-color: @accent@;
+    color: @accentInk@;
+    border: none;
+    border-left: 1px solid rgba(0, 0, 0, 46);
+    border-top-right-radius: 11px;
+    border-bottom-right-radius: 11px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    padding: 0 12px;
+    min-height: 46px;
+}
+
+QPushButton[modern="primaryRight"]::menu-indicator {
+    image: none;
+    width: 0;
+}
+
+QPushButton[modern="ghost"] {
+    border-radius: 11px;
+    padding: 0 18px;
+    min-height: 44px;
+}
+
+QPushButton[modern="ghost"]:checked {
+    background-color: @hover@;
+    border-color: @line@;
+    color: @accent@;
+}
+
+QPushButton[modern="surface"] {
+    background-color: @surf@;
+    border-radius: 10px;
+    padding: 0 16px;
+    min-height: 38px;
+}
+
+QPushButton[modern="surface"]:hover {
+    background-color: @surf2@;
+}
+
+QPushButton[modern="link"], QPushButton[modern="mutedLink"] {
+    background: transparent;
+    border: none;
+    padding: 0;
+    min-height: 0;
+    color: @accent@;
+}
+
+QPushButton[modern="mutedLink"] {
+    color: @muted@;
+}
+
+QPushButton[modern="link"]:hover, QPushButton[modern="mutedLink"]:hover {
+    color: @text@;
+}
+
+QPushButton[modern="link"]::menu-indicator, QPushButton[modern="mutedLink"]::menu-indicator {
+    image: none;
+    width: 0;
+}
+
+/* Text inputs, selects, numbers */
+
+QLineEdit, QAbstractSpinBox, QComboBox, QPlainTextEdit, QTextEdit {
+    background-color: @surf2@;
+    border: 1px solid @line@;
+    border-radius: 9px;
+    padding: 0 10px;
+    min-height: 34px;
+    selection-background-color: @accent@;
+    selection-color: @accentInk@;
+}
+
+QPlainTextEdit, QTextEdit {
+    padding: 6px 10px;
+}
+
+QLineEdit:focus, QAbstractSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {
+    border-color: @accent@;
+}
+
+QLineEdit#ModernSearch {
+    background-color: @surf@;
+    border-radius: 10px;
+    padding: 0 14px;
+    min-height: 38px;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 28px;
+}
+
+QComboBox::down-arrow {
+    image: url(@img@/chevron_down.png);
+    width: 10px;
+    height: 10px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: @pop@;
+    border: 1px solid @line@;
+    border-radius: 8px;
+    padding: 4px;
+    outline: 0;
+    selection-background-color: @accentSoft@;
+    selection-color: @text@;
+}
+
+QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
+    border: none;
+    background: transparent;
+    width: 22px;
+}
+
+QAbstractSpinBox::up-arrow {
+    image: url(@img@/chevron_up.png);
+    width: 10px;
+    height: 10px;
+}
+
+QAbstractSpinBox::down-arrow {
+    image: url(@img@/chevron_down.png);
+    width: 10px;
+    height: 10px;
+}
+
+/* Toggles: check boxes are drawn as switches */
+
+QCheckBox {
+    spacing: 10px;
+}
+
+QCheckBox::indicator, QGroupBox::indicator, QAbstractItemView::indicator {
+    width: 40px;
+    height: 23px;
+}
+
+QCheckBox::indicator:unchecked, QGroupBox::indicator:unchecked,
+QAbstractItemView::indicator:unchecked, QCheckBox::indicator:indeterminate,
+QAbstractItemView::indicator:indeterminate {
+    image: url(@img@/switch_off.png);
+}
+
+QCheckBox::indicator:checked, QGroupBox::indicator:checked,
+QAbstractItemView::indicator:checked {
+    image: url(@img@/switch_on.png);
+}
+
+/* Sliders */
+
+QSlider::groove:horizontal {
+    height: 4px;
+    background-color: @surf2@;
+    border-radius: 2px;
+}
+
+QSlider::sub-page:horizontal {
+    background-color: @accent@;
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+    border-radius: 8px;
+    background-color: #ffffff;
+}
+
+/* Groups are cards with the title above */
+
+QGroupBox {
+    background-color: @surf@;
+    border: 1px solid @line@;
+    border-radius: 16px;
+    margin-top: 34px;
+    padding: 10px 14px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 2px;
+    top: 8px;
+    padding: 0;
+    color: @text@;
+}
+
+QGroupBox QGroupBox {
+    background-color: transparent;
+    border-radius: 12px;
+}
+
+QFrame[modern="card"] {
+    background-color: @surf@;
+    border: 1px solid @line@;
+    border-radius: 16px;
+}
+
+QFrame[modern="flyout"] {
+    background-color: @pop@;
+    border: 1px solid @line@;
+    border-radius: 12px;
+}
+
+QFrame[modern="line"] {
+    background-color: @line@;
+    border: none;
+    max-height: 1px;
+    min-height: 1px;
+}
+
+QWidget#ModernSidebar {
+    background-color: @side@;
+    border-right: 1px solid @line@;
+}
+
+QLabel[modern="muted"] {
+    color: @muted@;
+}
+
+QLabel[modern="dim"] {
+    color: @dim@;
+}
+
+/* Tabs as a segmented control */
+
+QTabWidget::pane {
+    border: none;
+    top: 8px;
+}
+
+QTabBar {
+    qproperty-drawBase: 0;
+}
+
+QTabBar::tab {
+    background-color: @surf@;
+    border: 1px solid @line@;
+    border-radius: 8px;
+    color: @muted@;
+    padding: 7px 14px;
+    margin: 0 4px 0 0;
+}
+
+QTabBar::tab:hover {
+    color: @text@;
+}
+
+QTabBar::tab:selected {
+    background-color: @surf2@;
+    color: @text@;
+}
+
+/* Lists, trees, tables */
+
+QAbstractItemView {
+    background-color: @surf@;
+    alternate-background-color: @surf2@;
+    border: 1px solid @line@;
+    border-radius: 12px;
+    outline: 0;
+    selection-background-color: @accentSoft@;
+    selection-color: @text@;
+}
+
+QAbstractItemView::item {
+    padding: 5px 6px;
+}
+
+QAbstractItemView::item:hover {
+    background-color: @hover@;
+}
+
+QAbstractItemView::item:selected {
+    background-color: @accentSoft@;
+    color: @text@;
+}
+
+QHeaderView {
+    background: transparent;
+}
+
+QHeaderView::section {
+    background: transparent;
+    color: @muted@;
+    border: none;
+    border-bottom: 1px solid @line@;
+    padding: 6px 8px;
+}
+
+QListView#ModernShelf {
+    background: transparent;
+    border: none;
+}
+
+/* Settings: the category list is a plain column, not a boxed list */
+
+ConfigureDialog QListWidget#selectorList {
+    background: transparent;
+    border: none;
+}
+
+ConfigureDialog QListWidget#selectorList::item {
+    padding: 9px 12px;
+    border-radius: 8px;
+}
+
+/* Generated setting rows: label and description left, control right, a line between rows */
+
+QWidget[modern="row"] {
+    border-bottom: 1px solid @line@;
+}
+
+/* Scroll bars */
+
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 2px;
+}
+
+QScrollBar::handle {
+    background-color: @line@;
+    border-radius: 3px;
+    min-height: 30px;
+    min-width: 30px;
+}
+
+QScrollBar::handle:hover {
+    background-color: @dim@;
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    width: 0;
+    height: 0;
+}
+
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: none;
+}
+
+/* Controls: the mapping pages are dense grids of small groups, so they get tighter cards. */
+
+QGroupBox QGroupBox, ConfigureInputPlayer QGroupBox, ConfigureInputAdvanced QGroupBox {
+    margin-top: 24px;
+    padding: 4px 6px;
+    border-radius: 10px;
+}
+
+QGroupBox QGroupBox::title, ConfigureInputPlayer QGroupBox::title,
+ConfigureInputAdvanced QGroupBox::title {
+    top: 4px;
+}
+
+ConfigureInputPlayer QPushButton, ConfigureInputAdvanced QPushButton {
+    padding: 3px 8px;
+    border-radius: 6px;
+    min-height: 18px;
+}
+
+ConfigureInputPlayer QComboBox, ConfigureInputPlayer QAbstractSpinBox,
+ConfigureInputAdvanced QComboBox {
+    min-height: 26px;
+    padding: 0 8px;
+    border-radius: 7px;
+}

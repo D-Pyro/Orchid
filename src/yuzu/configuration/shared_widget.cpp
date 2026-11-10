@@ -46,6 +46,8 @@
 #include "common/settings.h"
 #include "common/settings_common.h"
 #include "qt_common/config/shared_translation.h"
+#include "qt_common/config/uisettings.h"
+#include "yuzu/modern/theme.h"
 #include "qt_common/qt_compat.h"
 
 namespace ConfigurationShared {
@@ -96,7 +98,26 @@ QPushButton* Widget::CreateRestoreGlobalButton(bool using_global, QWidget* paren
 QLabel* Widget::CreateLabel(const QString& text) {
     QLabel* qt_label = new QLabel(text, this->parent);
     qt_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    if (!row_description.isEmpty()) {
+        // The label stands above its description here, so it loses the "Label:" colon.
+        const QString title = text.endsWith(QLatin1Char(':')) ? text.chopped(1) : text;
+        qt_label->setWordWrap(true);
+        qt_label->setText(
+            QStringLiteral("%1<br><span style=\"font-size: 9.5pt; color: %2;\">%3</span>")
+                .arg(title.toHtmlEscaped(), ModernTheme::Current().muted.name(),
+                     row_description.toHtmlEscaped()));
+        row_label = qt_label;
+    }
     return qt_label;
+}
+
+void Widget::resizeEvent(QResizeEvent* event) {
+    // The settings pages sit in layouts that ignore height-for-width, which would cut off a
+    // wrapped description.
+    if (row_label != nullptr) {
+        row_label->setMinimumHeight(row_label->heightForWidth(row_label->width()));
+    }
+    QWidget::resizeEvent(event);
 }
 
 QWidget* Widget::CreateCheckBox(Settings::BasicSetting* bool_setting, const QString& label,
@@ -514,6 +535,16 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
+    // Modern interface: every row has the label (and description) left and the control right,
+    // toggles included, with a line between rows.
+    const bool modern = UISettings::values.modern_interface.GetValue();
+    if (modern) {
+        layout->setContentsMargins(0, 12, 0, 12);
+        layout->setSpacing(28);
+        setProperty("modern", QStringLiteral("row"));
+        setAttribute(Qt::WA_StyledBackground);
+    }
+
     if (other_setting == nullptr) {
         // A paired setting without the Paired specialization gets a widget of its own, and
         // several settings can share it, so they must not each save their own checkbox to it
@@ -583,13 +614,14 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
         QWidget* lhs =
             CreateCheckBox(other_setting, label, checkbox_serializer, checkbox_restore_func, touch);
         layout->addWidget(lhs, 1);
-    } else if (type_id != "bool") {
+    } else if (type_id != "bool" || modern) {
         QLabel* qt_label = CreateLabel(label);
         layout->addWidget(qt_label, 1);
     }
 
     if (type_id == "bool") {
-        data_component = CreateCheckBox(&setting, label, serializer, restore_func, touch);
+        data_component = CreateCheckBox(&setting, modern && !require_checkbox ? QString() : label,
+                                        serializer, restore_func, touch);
     } else if (type_id == "string") {
         switch (request) {
         case RequestType::Default:
@@ -657,7 +689,14 @@ void Widget::SetupComponent(const QString& label, std::function<void()>& load_fu
         return;
     }
 
-    layout->addWidget(data_component, 1);
+    if (modern && type_id == "bool" && !require_checkbox) {
+        layout->addWidget(data_component, 0, Qt::AlignRight | Qt::AlignVCenter);
+    } else {
+        if (modern) {
+            data_component->setMaximumWidth(340);
+        }
+        layout->addWidget(data_component, 1);
+    }
 
     if (!managed) {
         return;
@@ -748,6 +787,12 @@ Widget::Widget(Settings::BasicSetting* setting_, const TranslationMap& translati
         LOG_DEBUG(Frontend, "Translation table has empty entry for \"{}\", skipping...",
                   setting.GetLabel());
         return;
+    }
+
+    if (UISettings::values.modern_interface.GetValue()) {
+        // First sentence or line of the tooltip; the full text stays the tooltip.
+        static const QRegularExpression sentence_end{QStringLiteral(R"(\.\s|\n)")};
+        row_description = tooltip.section(sentence_end, 0, 0).trimmed();
     }
 
     std::function<void()> load_func = []() {};

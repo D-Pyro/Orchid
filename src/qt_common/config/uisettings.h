@@ -205,6 +205,11 @@ struct Values {
         linkage, {}, "room_description", Category::Multiplayer};
     std::pair<std::vector<std::string>, std::vector<std::string>> multiplayer_ban_list;
 
+    // Modern interface (sidebar, library with artwork, game details) instead of menu bar and list
+    Setting<bool> modern_interface{linkage, false, "modern_interface", Category::Ui};
+    Setting<unsigned long long> modern_selected_game{linkage, 0, "modern_selected_game",
+                                                     Category::UiGameList};
+
     // Game List
     Setting<bool> show_add_ons{linkage, true, "show_add_ons", Category::UiGameList};
     Setting<u32, true> game_icon_size{linkage, 64, 0, 512, "game_icon_size", Category::UiGameList};

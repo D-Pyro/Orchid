@@ -149,6 +149,11 @@ private:
 
     bool created{false};
     bool runtime_lock{false};
+    /// Modern interface: shortened tooltip, shown under the label
+    QString row_description;
+    QLabel* row_label{};
+
+    void resizeEvent(QResizeEvent* event) override;
 };
 
 class Builder {

@@ -112,7 +112,10 @@ public:
 
         setData(tooltip, Qt::ToolTipRole);
 
-        const u32 size = UISettings::values.game_icon_size.GetValue();
+        // The modern interface shows the icon large, whatever size the classic list is set to.
+        const u32 size = UISettings::values.modern_interface.GetValue()
+                             ? 256
+                             : UISettings::values.game_icon_size.GetValue();
 
         QPixmap picture;
         if (!picture.loadFromData(picture_data.data(), static_cast<u32>(picture_data.size()))) {
