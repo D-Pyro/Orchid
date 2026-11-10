@@ -16,11 +16,11 @@ committed.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [001](001-keep-real-vfs-children-inside-their-directory.md) | Host file creation and deletion through `RealVfsDirectory` stays inside the directory | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `b86337c285`) |
-| [002](002-reject-gaps-in-solid-ncz-sections.md) | A solid NCZ with a gap between sections fails cleanly | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `9d67ec6408`) |
+| [001](001-keep-real-vfs-children-inside-their-directory.md) | Host file creation and deletion through `RealVfsDirectory` stays inside the directory | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `6705eb8a08`) |
+| [002](002-reject-gaps-in-solid-ncz-sections.md) | A solid NCZ with a gap between sections fails cleanly | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `70f62fdbb8`) |
 | [003](003-extract-multi-program-nup-archives.md) | NUP archives of Switch 2 Edition dumps can be extracted again | P1 | S | — | TODO |
 | [004](004-lower-high-offset-64-bit-constant-loads.md) | 64-bit constant loads at offsets 0x8000 and above read the right bytes | P2 | S | — | TODO |
-| [005](005-zip-extraction-without-archive-symlinks.md) | Zip extraction never creates links from the archive | P2 | S | — | DONE (reviewed 2026-11-10, pushed to main as `e50e5cb392`) |
+| [005](005-zip-extraction-without-archive-symlinks.md) | Zip extraction never creates links from the archive | P2 | S | — | DONE (reviewed 2026-11-10, pushed to main as `b709dffe15`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale — finding fixed independently or approach abandoned)
 
