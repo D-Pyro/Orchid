@@ -46,6 +46,8 @@ void CheckPairLoad(const auto& lower, u32 low_offset, u32 first_register) {
             REQUIRE(Bits(loads[half], 0, 8) == first_register + half);
             REQUIRE(Bits(loads[half], 20, 14) == offset / 4 + half);
             REQUIRE(Bits(loads[half], 34, 5) == 2);
+            // The MOV write mask: anything but all four bits is not a plain 32-bit load.
+            REQUIRE(Bits(loads[half], 39, 4) == 0xf);
         }
     }
     // The pair would cross the end of the 16-bit offset range.
