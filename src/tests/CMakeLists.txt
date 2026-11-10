@@ -15,6 +15,7 @@ add_executable(tests
     common/hitch_diagnostic.cpp
     common/host_memory.cpp
     common/host_memory_fallback.cpp
+    common/host_resources.cpp
     common/page_table.cpp
     common/paged_scalar.cpp
     common/param_package.cpp
