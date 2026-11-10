@@ -64,124 +64,149 @@ to apply build optimizations; prepare them for subsequent runs.
 
 # Orchid agent workflow
 
-## Orchid: automatische Mutationsprüfung bei Agent-Tests
+Applies to the main checkout, all its worktrees (also under `~/.t3/worktrees/` and
+`~/Documents/Codex/`) and other checkouts of MythosOfs/Orchid, for every agent and subagent
+(including automatic issue, review/merge and fork-scan runs). Machine addresses and the
+maintainer's own rules live in the maintainer's private `~/.claude/CLAUDE.md`, not here.
 
-Gilt für `/home/leon/src/Eglantine`, dessen Worktrees (auch unter `.t3/worktrees/`
-und `Documents/Codex/`) und andere Checkouts von MythosOfs/Orchid.
-Bei Orchid-Änderungen an Produktionscode oder Unit-Tests die Mutationsprüfung
-selbstständig als verpflichtenden Teil der Abschlussverifikation ausführen, ohne
-Erinnerung, gesonderten Auftrag oder Rückfrage an Leon. Das gilt auch für Subagents
-und automatische Issue-, Review-/Merge- und Forkscan-Läufe, wenn sie solchen Code ändern.
-Passenden Catch2-Filter, Build-Ordner und Diff-Basis selbst bestimmen; bei reinen
-Teständerungen die betroffene Produktionsdatei mit `--file` auswählen.
-Für diese Verifikation verbindlich den lokalen Runner verwenden:
+## Mutation check is part of the final verification
+
+When production code or unit tests change, run the mutation check yourself as a mandatory part of
+the final verification, without being reminded or asked. Pick the Catch2 filter, build directory
+and diff base yourself; for test-only changes select the affected production file with `--file`.
+Use the local runner:
 
 ```sh
-orchid-agent-test -- "<passender Catch2-Filter>"
-# Andere Build-Verzeichnisse oder bereits committete Änderungen:
-orchid-agent-test --build-dir build-local --base origin/main -- "<Filter>"
-# Bei reinen Teständerungen die zugehörige Produktionsdatei angeben:
-orchid-agent-test --file src/common/example.h -- "<Filter>"
+orchid-agent-test -- "<matching Catch2 filter>"
+# Other build directories or already committed changes:
+orchid-agent-test --build-dir build-local --base origin/main -- "<filter>"
+# Test-only changes: name the matching production file:
+orchid-agent-test --file src/common/example.h -- "<filter>"
 ```
 
-Der Runner baut und testet zuerst normal, danach automatisch eine begrenzte Auswahl
-von Produktionscode-Mutationen mit dumbmutate in einer privaten Quellkopie.
-Standard: maximal drei geänderte Zeilen, mindestens 80 % erkannte gültige Mutanten.
-`--base HEAD` erfasst unstaged, staged und neue Produktionsdateien; für committete
-Branch-Änderungen die fachlich passende Basis explizit übergeben.
-Direkte `build/bin/tests`-Aufrufe bleiben für schnelle Diagnose erlaubt, ersetzen
-aber nicht diesen Abschlusslauf. Exit 1 = Mutation-Score unter Schwelle;
-Exit 2 = fehlgeschlagene Baseline oder unvollständige/inkonklusive Prüfung.
-Keine passenden Mutationen gilt nicht als bestandene Mutationsprüfung. Überlebende
-Mutanten untersuchen: Test ergänzen oder Verhaltensäquivalenz konkret begründen;
-die Schwelle nicht bloß zum Grünwerden senken. Teilprüfung (Dateien/Zeilenbudget)
-im Ergebnis nennen; sie garantiert keine vollständige Fehlerfreiheit.
-Berichte: `/home/leon/Orchid/orchid-issues/mutation/<Lauf>/`.
-Private Builds unter `~/.cache/orchid-mutation/` nicht ausliefern oder direkt starten.
-Die private Kopie übernimmt den aktuellen Build per Btrfs-Reflink; bubblewrap
-erhält dessen absolute Pfade in einer eigenen Mount-Umgebung. Nur betroffene
-Dateien müssen für Mutanten neu gebaut werden. Zeitlimit pro Zeile: 10 Minuten;
-Timeouts gelten als unvollständig. Ein veralteter normaler Build wird zuerst aktualisiert.
-Installation/Quellen: `~/.local/share/orchid-mutation/`, Engine:
-`~/.local/share/orchid-dumbmutate/`. Keine Git-Hooks oder globalen Compilerflags.
+The runner first builds and tests normally, then mutates a limited selection of production code
+with dumbmutate in a private source copy. Default: at most three changed lines, at least 80 % of
+valid mutants detected. `--base HEAD` covers unstaged, staged and new production files; for
+committed branch changes pass the matching base explicitly. Running `build/bin/tests` directly is
+fine for quick diagnosis but does not replace this final run.
 
-Ninja-Diagnosen (`-n`, `-t`) ebenfalls nicht parallel auf dasselbe Orchid-Build-Verzeichnis richten;
-auch Diagnoseaufrufe können beschädigte Ninja-Logdateien verändern.
+- Exit 1 = mutation score below threshold; exit 2 = failed baseline or incomplete/inconclusive check.
+- "No matching mutations" is not a pass.
+- Investigate surviving mutants: add a test or justify the behavioural equivalence concretely.
+  Never lower the threshold just to get green.
+- Name partial checks (files, line budget) in the result; they do not guarantee freedom from bugs.
+- Reports: `~/Orchid/orchid-issues/mutation/<run>/`. Do not ship or start the private builds under
+  `~/.cache/orchid-mutation/`. Time limit per line is 10 minutes; timeouts count as incomplete.
+  Install: `~/.local/share/orchid-mutation/`, engine `~/.local/share/orchid-dumbmutate/`.
+  No git hooks or global compiler flags.
+- Do not aim ninja diagnostics (`-n`, `-t`) at a build directory in parallel with another ninja
+  run; even diagnostics can corrupt ninja log files.
 
-## Orchid-Testshortcuts richtig anlegen (Leon testet selbst)
+## All emulator tests run on the PC
 
-Ein Shortcut gilt erst als fertig, wenn sein exakter `Exec` mit `--check` durchläuft. Leon soll nie zweimal klicken müssen.
+Every test that starts the emulator (performance/fps, headless boots, repro runs, A/B
+comparisons, screenshots, logs) runs on the PC (RX 9070 XT), not on the laptop, and the agent
+runs performance and sound tests itself even while the maintainer is at home. Start emulators
+with `agent-run` (the `orchid` MCP does this already), keep runs short, and end the emulator
+afterwards. The laptop runs no emulator tests; it may only compile (see below). The maintainer
+tests only the final build before a release.
 
-1. Datei `~/.local/share/applications/orchid-test-<label>.desktop`:
+### Performance measurements
+
+- Use `orchid-test-run <label> <binary|AppImage> -g <game>` for every number you report. It freezes
+  `agent-work.slice` (parallel builds and emulators of other sessions) for the duration and thaws
+  it afterwards, and records MangoHud CSV, per-thread CPU, log, settings and a verdict in
+  `~/orchid-perf/<date>-<label>/summary.txt`. Compare runs with `orchid-perf-summary <dir>...`.
+  Plain `agent-run` is not a valid performance measurement while other builds may be running.
+  `orchid-test-run` opens a visible window on the desktop; that is expected.
+- Measure in the real scene (an actual match or gameplay, not menus or videos) at 1x resolution
+  scaling, and judge against the fps cap. See the `orchid-fps-bench` skill for the
+  baseline-first, one-change-per-run loop.
+- fps can be bimodal because of host scheduling (issue 128 swung between about 21 and 30 fps with
+  identical code). Therefore: at least 3 runs per variant, alternating A and B, always with a
+  baseline of the previous good build. A change counts only if it clearly exceeds the spread
+  between runs of the same variant. Check the scheduler churn in `threads.log`/`meta.txt` before
+  blaming the code.
+
+### Sound checks (dropouts show up as gaps in the waveform)
+
+Run the game with `PULSE_SINK=orchid_test` so nothing comes out of the speakers and only the
+emulator is recorded:
+
+```sh
+M=$(pactl load-module module-null-sink sink_name=orchid_test)
+parec -d orchid_test.monitor --file-format=wav rec.wav &   # start before the game, kill afterwards
+# ... PULSE_SINK=orchid_test agent-run <binary> -g <game> ...
+ffmpeg -hide_banner -i rec.wav -af silencedetect=n=-60dB:d=0.02 -f null - 2>&1 | grep silence_
+pactl unload-module $M
+```
+
+- Silence of 20 ms or more in the middle of continuous music or effects is a dropout (underrun).
+  Silence at the start, on loading screens and in real game pauses is normal.
+- Always compare with a baseline recording of the last good build in the same scene, and also
+  check the emulator log for audio underruns.
+- Baselines: `~/orchid-perf/audio-baseline/<game>-<scene>.wav`, one fixed scene per game. Create
+  the baseline from the last known good build before judging a change, and keep it up to date.
+- This finds gaps, not wrong pitch, wrong tempo or missing instruments; for those compare the
+  length and a spectrogram with the baseline. The method was verified with a test tone containing
+  an 80 ms gap, not yet with Orchid itself (check that the audio backend honours `PULSE_SINK`).
+
+### Builds: PC or laptop
+
+If the laptop is idle (no `orchid`/`eden-cli`, no other build), compiling there relieves the PC.
+Check it with `ssh <laptop> 'pgrep -x orchid || pgrep -x eden-cli || pgrep -x ninja'` (no output =
+idle); the address is in the maintainer's `~/.claude/CLAUDE.md`. Only one full build per machine at
+a time; otherwise build on the PC (`build-scope`/`agent-run`). Copy the finished binary or
+AppImage to the PC with `scp` and check it with `ldd`.
+
+## Test shortcuts for the maintainer (final build before a release)
+
+The maintainer tests only the final release build. Create the shortcut then, not for every
+intermediate build. A shortcut is only done when its exact `Exec` passes `--check`; the
+maintainer must never have to click twice.
+
+1. File `~/.local/share/applications/orchid-test-<label>.desktop`:
    ```ini
    [Desktop Entry]
    Type=Application
    Name=Orchid <label> (Test)
-   Exec=env EDEN_XYZ=1 /home/leon/.local/bin/orchid-test-run <label> <absoluter Pfad zu AppImage oder build*/bin/orchid> %f
+   Exec=env EDEN_XYZ=1 ~/.local/bin/orchid-test-run <label> <absolute path to AppImage or build*/bin/orchid> %f
    Icon=orchid
    Terminal=false
    Categories=Game;Emulator;
    X-Orchid-Test=true
    ```
-   Env-Schalter nur über `env VAR=wert` vor `orchid-test-run` setzen. Pfade mit Leerzeichen in `"..."`. Kein `QT_QPA_PLATFORM` und kein `DISPLAY` setzen, das macht `orchid-test-run`.
-2. Prüfen, alle drei müssen grün sein:
+   Use an absolute home path in `Exec` if your desktop does not expand `~`. Set environment switches
+   only via `env VAR=value` before `orchid-test-run`. Quote paths with spaces in `"..."`. Do not
+   set `QT_QPA_PLATFORM` or `DISPLAY`; `orchid-test-run` does that.
+2. Check; all three must be green:
    ```sh
    desktop-file-validate ~/.local/share/applications/orchid-test-<label>.desktop
-   ex=$(sed -n 's/^Exec=//p' <datei> | sed 's/ %f$//; s#orchid-test-run #orchid-test-run --check #'); eval "$ex"   # -> "check ok"
-   ldd <binary> | grep 'not found'    # muss leer sein (bei AppImages entfällt das)
+   ex=$(sed -n 's/^Exec=//p' <file> | sed 's/ %f$//; s#orchid-test-run #orchid-test-run --check #'); eval "$ex"   # -> "check ok"
+   ldd <binary> | grep 'not found'    # must be empty (not needed for AppImages)
    ```
 3. `update-desktop-database ~/.local/share/applications`.
 
-Warum (Stand 2026-11-07): Hyprland 0.56 stellt Xwayland nur als `/tmp/.X11-unix/X0_` bereit, Qt-xcb sucht aber `X0` und bricht dann nach 0,5 s mit Exit 134 ab. Das sieht so aus, als würde der Shortcut nicht starten. `orchid-test-run` legt den Link `X0 -> X0_` jetzt selbst an, prüft das Display mit `xprop` und meldet Startfehler als Desktop-Benachrichtigung. Startet ein Test trotzdem nicht: `coredumpctl list` und `~/orchid-perf/<neuester>/meta.txt` (Exit-Code) ansehen.
+Why (2026-11-07): Hyprland 0.56 provides Xwayland only as `/tmp/.X11-unix/X0_`, but Qt-xcb looks
+for `X0` and aborts after 0.5 s with exit 134, which looks as if the shortcut does not start.
+`orchid-test-run` creates the link `X0 -> X0_` itself, checks the display with `xprop` and reports
+start failures as a desktop notification. If a test still does not start: look at
+`coredumpctl list` and `~/orchid-perf/<newest>/meta.txt` (exit code).
 
-## Orchid: Worktrees und Builds nach Abschluss aufräumen
+## Clean up worktrees and builds when a task is done
 
-Sobald eine Orchid-Aufgabe fertig ist und ihr Worktree/Build nicht mehr gebraucht wird, räumt
-der Agent selbst auf, ohne Rückfrage (Leon 2026-11-08). Gilt für Worktrees unter
-`~/.t3/worktrees/Eglantine/`, `~/src/Eglantine-*`, `~/src/Eglantine/.claude/worktrees/`,
-`~/Documents/Codex/*/work/`, für deren `build*/`-Ordner, Test-Binaries unter
-`~/Orchid/orchid-builds/` und private Builds unter `~/.cache/orchid-mutation/`.
+When an Orchid task is finished and its worktree/build is no longer needed, the agent cleans up
+itself without asking. This covers worktrees under `~/.t3/worktrees/Eglantine/`, `~/src/Eglantine-*`,
+`~/src/Eglantine/.claude/worktrees/`, `~/Documents/Codex/*/work/`, their `build*/` directories, test
+binaries under `~/Orchid/orchid-builds/` and private builds under `~/.cache/orchid-mutation/`.
 
-- Entfernen nur, wenn alles gesichert ist: `git status` ohne Code-Änderungen (nur Logs/Builds),
-  `git rev-list HEAD --not --remotes` leer, kein Prozess mit cwd/Binary darin, kein
-  `orchid-test-*.desktop` zeigt darauf, kein laufender T3-Thread arbeitet darin.
-- Dann `git -C /home/leon/src/Eglantine worktree remove --force <pfad>`, lokalen Branch löschen
-  (Tipp liegt auf dem Remote), `git worktree prune`.
-- Worktrees mit ungesicherter Arbeit bleiben; deren alte `build*/`-Ordner dürfen weg (ccache baut neu).
-- Test-Binaries in `~/Orchid/orchid-builds/` löschen, sobald Leon mit dem Test durch ist
-  (zusammen mit den `orchid-test-*.desktop`-Shortcuts). Spieldaten (`.nup`, Dumps) nicht.
-- Nicht anfassen: Haupt-Checkout `~/src/Eglantine` und dessen `build/`, Worktrees fremder Repos
-  (z.B. `~/Development/Eglantine-Official`, Djihads80), den eigenen laufenden Worktree.
-
-## Orchid: alle Emulator-Tests laufen auf dem PC
-
-Gilt für alle Orchid-Agents und Subagents (Leon 2026-11-10). Jeder Test, der den
-Emulator startet (Performance-/fps-Messungen, headless Boots, Repro-Läufe, A/B-Vergleiche,
-Screenshots, Logs), läuft auf dem **PC** (RX 9070 XT), nicht auf dem Laptop. Dort immer
-per `agent-run` starten (z.B. `agent-run ./build/bin/orchid -g <game>`), MCP `orchid` macht das schon.
-Eigenen Emulator nach dem Test beenden.
-
-- Der Laptop (`leon@192.168.150.206`, Tailscale `100.111.165.26`) führt keine Emulator-Tests
-  mehr aus. Die alte `.126` ist ungültig.
-- Performance und Sound testet der Agent selbst am PC, auch wenn Leon zu Hause ist
-  (Leon 2026-11-10). Kurze Läufe, danach Emulator beenden.
-- **Sound prüfen (Aussetzer = Lücken in der Wellenform):** Spiel mit `PULSE_SINK=orchid_test`
-  starten, damit nichts aus Leons Lautsprechern kommt und nur der Emulator aufgenommen wird:
-  ```sh
-  M=$(pactl load-module module-null-sink sink_name=orchid_test)
-  parec -d orchid_test.monitor --file-format=wav rec.wav &   # vor dem Spielstart, danach kill
-  # ... PULSE_SINK=orchid_test agent-run ./build/bin/orchid -g <game> ...
-  ffmpeg -hide_banner -i rec.wav -af silencedetect=n=-60dB:d=0.02 -f null - 2>&1 | grep silence_
-  pactl unload-module $M
-  ```
-  Jede Stille ab 20 ms mitten in durchgehender Musik/Effekten ist ein Aussetzer (Underrun).
-  Stille am Anfang, an Ladebildschirmen und in echten Spielpausen ist normal: immer gegen
-  einen Baseline-Lauf (letztes gutes Build, gleiche Szene) vergleichen und zusätzlich das
-  Emulator-Log auf Audio-Underruns prüfen. Das findet Lücken, nicht falsche Tonhöhe, Tempo
-  oder fehlende Instrumente; dafür Spektrogramm/Länge gegen die Baseline vergleichen.
-  Die Methode wurde mit einem Testton mit eingefügter 80-ms-Lücke verifiziert, noch nicht mit Orchid.
-- **Builds verteilen:** Ist der Laptop gerade frei (kein `orchid`/`eden-cli`, kein anderer Build),
-  darf dort kompiliert werden, um den PC zu entlasten. Prüfen z.B. mit
-  `ssh leon@100.111.165.26 'pgrep -x orchid || pgrep -x eden-cli || pgrep -x ninja'` (keine Ausgabe = frei).
-  Pro Maschine nur ein voller Build gleichzeitig; sonst am PC bauen (`build-scope`/`agent-run`).
-  Das fertige Binary oder AppImage per `scp` auf den PC holen und mit `ldd` prüfen.
+- Remove only if everything is safe: `git status` shows no code changes (only logs/builds),
+  `git rev-list HEAD --not --remotes` is empty, no process has its cwd/binary there, no
+  `orchid-test-*.desktop` points to it, and no running T3 thread works in it.
+- Then `git -C ~/src/Eglantine worktree remove --force <path>`, delete the local branch (its tip is
+  on the remote), `git worktree prune`.
+- Worktrees with unsaved work stay; their old `build*/` directories may go (ccache rebuilds).
+- Delete test binaries in `~/Orchid/orchid-builds/` once the maintainer is done testing (together
+  with the `orchid-test-*.desktop` shortcuts). Do not delete game data (`.nup`, dumps).
+- Do not touch: the main checkout `~/src/Eglantine` and its `build/`, worktrees of other
+  repositories (e.g. `~/Development/Eglantine-Official`, Djihads80), your own running worktree.
