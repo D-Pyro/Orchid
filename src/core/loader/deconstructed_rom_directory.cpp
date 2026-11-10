@@ -23,6 +23,7 @@
 #include "core/file_sys/patch_manager.h"
 #include "core/file_sys/romfs.h"
 #include "core/file_sys/romfs_factory.h"
+#include "core/file_sys/vfs/vfs_layered.h"
 #include "core/hle/kernel/k_page_table.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/service/filesystem/filesystem.h"
@@ -101,8 +102,109 @@ FileSys::VirtualDir FindLooseRomFSDirectory(const FileSys::VirtualDir& parent) {
     return nullptr;
 }
 
-// RomFS for a loose ExeFS: the first .romfs file next to main, else a romfs/ directory next to
-// the exefs/ directory (the usual layout of an extracted title).
+// Size of the main NSO inside an ExeFS directory (0 when absent); lets update tiers be
+// skipped when they contain data of a different build than the running program.
+u64 ExeFSMainSize(const FileSys::VirtualDir& dir) {
+    if (dir == nullptr) {
+        return 0;
+    }
+    for (const auto& candidate : dir->GetFiles()) {
+        if (candidate->GetName() == "main") {
+            return candidate->GetSize();
+        }
+    }
+    return 0;
+}
+
+// Update version folders under an updates/ (or upgrade/) storage folder, highest version
+// first; names that are not pure numbers (e.g. a title id) trail below every version as
+// a last resort.
+std::vector<std::pair<u64, FileSys::VirtualDir>> OrderedUpdateVersionDirs(
+    const FileSys::VirtualDir& storage_dir) {
+    std::vector<std::pair<u64, FileSys::VirtualDir>> out;
+    if (storage_dir == nullptr) {
+        return out;
+    }
+    for (const auto& candidate : storage_dir->GetSubdirectories()) {
+        const std::string name = candidate->GetName();
+        u64 version{0};
+        const auto parsed = std::from_chars(name.data(), name.data() + name.size(), version);
+        // from_chars stops at the first non digit and still reports success, so a
+        // directory called "655360_old" or "999999.bak" would be accepted with its
+        // leading digits. Require the whole name to be the number; anything else
+        // only serves when no numeric version exists at all.
+        if (parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size()) {
+            version = 0;
+        }
+        out.emplace_back(version, candidate);
+    }
+    std::stable_sort(out.begin(), out.end(),
+                     [](const auto& a, const auto& b) { return a.first > b.first; });
+    return out;
+}
+
+// Loose ExeFS dumps carry no control data, but icon/nacp sidecars can be dropped next to the
+// ExeFS or in the game folder above it (<game>/exefs/main, <game>/base/exefs/main and
+// <game>/updates/<title id>/exefs/main layouts).
+std::vector<FileSys::VirtualDir> FindSidecarDirs(const FileSys::VirtualDir& exefs_dir,
+                                              bool prefer_edition = false) {
+    const auto equals_ignore_case = [](const std::string& a, std::string_view b) {
+        return a.size() == b.size() &&
+               std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+                   return std::tolower(static_cast<unsigned char>(x)) ==
+                          std::tolower(static_cast<unsigned char>(y));
+               });
+    };
+
+    std::vector<FileSys::VirtualDir> dirs{exefs_dir};
+    auto dir = exefs_dir;
+    for (std::size_t depth = 0; depth < 8; ++depth) {
+        const auto parent = dir->GetParentDirectory();
+        if (parent == nullptr) {
+            break;
+        }
+        const auto& name = parent->GetName();
+        if (const auto control = parent->GetSubdirectory("control")) {
+            if (prefer_edition) {
+                if (const auto edition = control->GetSubdirectory("Acd_1")) {
+                    dirs.push_back(edition);
+                }
+            }
+            dirs.push_back(control);
+        }
+        dirs.push_back(parent);
+        const bool storage_level =
+            equals_ignore_case(name, "base") || equals_ignore_case(name, "update") ||
+            equals_ignore_case(name, "updates") || equals_ignore_case(name, "upgrade") ||
+            equals_ignore_case(name, "program") ||
+            // A consolidated cross-generation layout keeps the package next to the
+            // version folder instead of inside a program/ wrapper (`updates/<version>/
+            // program1`). It plays the same role, so the walk continues through it to
+            // hook the update and base RomFS tiers.
+            equals_ignore_case(name, "program1") ||
+            (!name.empty() && name.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos);
+        if (!storage_level) {
+            break;
+        }
+        dir = parent;
+    }
+    return dirs;
+}
+
+// RomFS for a loose ExeFS, mounted as a cascading fallback over the dump's tiers:
+//
+//   1. program tier: <package>/romfs, the companion folder of the running exefs/
+//      folder (program/1/romfs for Switch 2 Edition dumps, often structurally empty
+//      because a cross-gen upgrade only adds code)
+//   2. update tier:  updates/<newest version>/romfs (the legacy upgrade/ alias works too)
+//   3. base tier:    base/romfs, the foundational application data
+//
+// The tiers mount into one tree with LayeredVfsDirectory: each lookup checks the tiers in
+// order, and only reports nullptr (an asset failure) once no tier holds the path. Stage
+// data of Switch 2 Edition titles lives in the update or base trees, so a placeholder
+// program romfs must never act as an isolated volume root. Nothing is restructured or
+// copied anywhere: the layered mount aliases the tier files and the built image keeps
+// lazy views into them.
 FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
     if (exefs_dir == nullptr) {
         return nullptr;
@@ -113,93 +215,135 @@ FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
         }
     }
 
-    const auto build_from = [](const FileSys::VirtualDir& romfs_dir) -> FileSys::VirtualFile {
-        if (romfs_dir == nullptr) {
-            return nullptr;
-        }
-        // Building it walks every file and keeps an object for each (title 1: 206k files, ~150
-        // MiB), so loaders of the same directory share one build while any of them holds it.
-        static std::mutex cache_mutex;
-        static std::map<std::string, std::weak_ptr<FileSys::VfsFile>> cache;
-        std::scoped_lock lk{cache_mutex};
-        auto& cached = cache[romfs_dir->GetFullPath()];
-        if (auto built = cached.lock()) {
-            return built;
-        }
-        LOG_INFO(Loader, "Using RomFS directory next to the ExeFS");
-        const auto started = std::chrono::steady_clock::now();
-        auto built = FileSys::CreateRomFS(romfs_dir);
-        LOG_INFO(Loader, "Loose RomFS image ready: elapsed_ms={}",
-                 std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::steady_clock::now() - started)
-                     .count());
-        cached = built;
-        return built;
+    const auto parent = exefs_dir->GetParentDirectory();
+    if (parent == nullptr) {
+        return nullptr;
+    }
+
+    const auto equals_ignore_case = [](const std::string& a, std::string_view b) {
+        return a.size() == b.size() &&
+               std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+                   return std::tolower(static_cast<unsigned char>(x)) ==
+                          std::tolower(static_cast<unsigned char>(y));
+               });
     };
 
-    if (const auto parent = exefs_dir->GetParentDirectory()) {
-        if (const auto romfs_dir = FindLooseRomFSDirectory(parent)) {
-            return build_from(romfs_dir);
-        }
-        // Some base dumps carry only the executable and leave every file in an update, so the
-        // base has no romfs at all (Pokemon Pokopia: base/romfs does not exist, the 6.9 GB of
-        // data is in updates/655360/romfs). Handing a null RomFS to the title makes
-        // OpenDataStorageByCurrentProcess fail and the game panics with an opaque 0x3fffff
-        // instead of saying where the data is. Prefer the newest update present.
-        if (const auto root = parent->GetParentDirectory()) {
-            if (const auto updates = root->GetSubdirectory("updates")) {
-                FileSys::VirtualDir newest{};
-                u64 newest_version{0};
-                for (const auto& candidate : updates->GetSubdirectories()) {
-                    const std::string name = candidate->GetName();
-                    u64 version{0};
-                    const auto parsed =
-                        std::from_chars(name.data(), name.data() + name.size(), version);
-                    // from_chars stops at the first non digit and still reports success, so a
-                    // directory called "655360_old" or "999999.bak" would be accepted with its
-                    // leading digits. Require the whole name to be the number.
-                    if (parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size()) {
-                        continue;
-                    }
-                    if (version >= newest_version) {
-                        newest_version = version;
-                        newest = candidate;
-                    }
+    // 1. Program tier: the romfs/ extraction folder next to the running exefs/ folder.
+    FileSys::VirtualDir program_romfs = FindLooseRomFSDirectory(parent);
+
+    // 2. and 3. live at the storage root of the game, which the sidecar walk finds for
+    // both <game>/program/1/... and <game>/base/program/1/... dump layouts.
+    FileSys::VirtualDir update_romfs;
+    FileSys::VirtualDir base_dir;
+    const auto sidecars = FindSidecarDirs(exefs_dir);
+    const auto& storage = sidecars.back();
+    if (storage != nullptr) {
+        // 2. Update tier: newest version folder holding a romfs. A tier is skipped, not
+        // fatal, when its build differs from the running program: running a 1.0 program
+        // against 2.0.1 data boots and then writes to unmapped memory in a loop
+        // (Pokopia: 2012 invalid byte writes). With tiers below, the next tier can still
+        // backfill its own data instead of refusing the RomFS outright.
+        for (const auto name : {std::string_view{"updates"}, std::string_view{"upgrade"}}) {
+            const auto update_storage = storage->GetSubdirectory(name);
+            bool found_update = false;
+            for (const auto& [version, version_dir] : OrderedUpdateVersionDirs(update_storage)) {
+                const auto candidate = FindLooseRomFSDirectory(version_dir);
+                if (candidate == nullptr) {
+                    continue;
                 }
-                if (const auto romfs_dir = FindLooseRomFSDirectory(newest)) {
-                    // Only safe when the executable is the same build as the update: running a 1.0
-                    // program against 2.0.1 data boots and then writes to unmapped memory in a
-                    // loop (Pokopia: 2012 invalid byte writes), which is worse than refusing.
-                    const auto main_size = [](const FileSys::VirtualDir& dir) -> u64 {
-                        if (dir == nullptr) {
-                            return 0;
-                        }
-                        for (const auto& candidate : dir->GetFiles()) {
-                            if (candidate->GetName() == "main") {
-                                return candidate->GetSize();
-                            }
-                        }
-                        return 0;
-                    };
-                    const auto base_exefs_size = main_size(exefs_dir);
-                    const auto update_exefs_size = main_size(newest->GetSubdirectory("exefs"));
-                    if (base_exefs_size != 0 && update_exefs_size != 0 &&
-                        base_exefs_size != update_exefs_size) {
-                        LOG_ERROR(Loader,
-                                  "Base RomFS is absent and the update RomFS belongs to a different "
-                                  "build (base main {} bytes, update main {} bytes). Load the "
-                                  "update's exefs instead of the base one.",
-                                  base_exefs_size, update_exefs_size);
-                        return nullptr;
-                    }
-                    LOG_INFO(Loader, "Base RomFS is absent, using the update RomFS (version {})",
-                             newest_version);
-                    return build_from(romfs_dir);
+                const auto update_main_size = ExeFSMainSize(version_dir->GetSubdirectory("exefs"));
+                const auto running_main_size = ExeFSMainSize(exefs_dir);
+                // A program kept inside this version folder (updates/<version>/program1) is
+                // the native edition built on top of that update's data, so its RomFS tier
+                // always belongs; the size check only guards a program from elsewhere.
+                const auto program_dir = parent->GetParentDirectory();
+                const bool own_version =
+                    program_dir != nullptr && version_dir != nullptr &&
+                    program_dir->GetFullPath() == version_dir->GetFullPath();
+                if (!own_version && running_main_size != 0 && update_main_size != 0 &&
+                    running_main_size != update_main_size) {
+                    LOG_ERROR(Loader,
+                              "Update RomFS (version {}) belongs to a different build (running "
+                              "main {} bytes, update main {} bytes); skipping the update tier",
+                              version, running_main_size, update_main_size);
+                    continue;
                 }
+                update_romfs = candidate;
+                found_update = true;
+                break;
+            }
+            if (found_update) {
+                break;
             }
         }
+
+        // 3. Base tier: the base/ folder is either on the sidecar chain itself
+        // (base/program/1/... dumps) or sits next to the storage root.
+        for (const auto& dir : sidecars) {
+            if (equals_ignore_case(dir->GetName(), "base")) {
+                base_dir = dir;
+                break;
+            }
+        }
+        if (base_dir == nullptr) {
+            base_dir = storage->GetSubdirectory("base");
+        }
     }
-    return nullptr;
+
+    std::vector<FileSys::VirtualDir> tiers;
+    const auto add_tier = [&tiers](const FileSys::VirtualDir& tier, const char* description) {
+        if (tier == nullptr) {
+            return;
+        }
+        if (std::find(tiers.begin(), tiers.end(), tier) != tiers.end()) {
+            // The same folder can surface through several resolutions (e.g. a flat
+            // base dump reaches the base tier through both routes).
+            return;
+        }
+        LOG_INFO(Loader, "Layering the {} RomFS tier from {}", description, tier->GetFullPath());
+        tiers.push_back(tier);
+    };
+    add_tier(program_romfs, "program");
+    add_tier(update_romfs, "update");
+    add_tier(FindLooseRomFSDirectory(base_dir), "base");
+
+    if (tiers.empty()) {
+        // Handing a null RomFS to the title makes OpenDataStorageByCurrentProcess fail
+        // and the game panic with an opaque 0x3fffff instead of saying where the data is.
+        LOG_ERROR(Loader, "No RomFS tier could be resolved from {} (program, update or base)",
+                  exefs_dir->GetFullPath());
+        return nullptr;
+    }
+
+    const std::size_t tier_count = tiers.size();
+
+    // Building it walks every file and keeps an object for each (title 1: 206k files, ~150
+    // MiB), so loaders of the same directory share one build while any of them holds it.
+    static std::mutex cache_mutex;
+    static std::map<std::string, std::weak_ptr<FileSys::VfsFile>> cache;
+    std::scoped_lock lk{cache_mutex};
+
+    // The cache key carries the tier count: one process can serve different fallback
+    // compositions over the same program tier (update only vs. update + base).
+    const auto mounted = FileSys::LayeredVfsDirectory::MakeLayeredDirectory(std::move(tiers));
+    if (mounted == nullptr) {
+        return nullptr;
+    }
+    const auto cache_key = fmt::format("layers={}:{}", tier_count, mounted->GetFullPath());
+    auto& cached = cache[cache_key];
+    if (auto built = cached.lock()) {
+        return built;
+    }
+
+    LOG_INFO(Loader, "Composing the RomFS as a layered mount over {} tier(s)", tier_count);
+    const auto started = std::chrono::steady_clock::now();
+    auto built = FileSys::CreateRomFS(mounted);
+    LOG_INFO(Loader, "Loose RomFS image ready: elapsed_ms={}",
+             std::chrono::duration_cast<std::chrono::milliseconds>(
+                 std::chrono::steady_clock::now() - started)
+                 .count());
+    cached = built;
+    return built;
 }
 
 // The newest three-digit tag in a directory's file names of the form <prefix>NNN.<anything>.
@@ -247,49 +391,6 @@ std::string RomFSProductVersion(const FileSys::VirtualDir& romfs_dir) {
         return {};
     }
     return fmt::format("{}.{}.{}", best[0], best[1], best[2]);
-}
-
-// Loose ExeFS dumps carry no control data, but icon/nacp sidecars can be dropped next to the
-// ExeFS or in the game folder above it (<game>/exefs/main, <game>/base/exefs/main and
-// <game>/updates/<title id>/exefs/main layouts).
-std::vector<FileSys::VirtualDir> FindSidecarDirs(const FileSys::VirtualDir& exefs_dir,
-                                              bool prefer_edition = false) {
-    const auto equals_ignore_case = [](const std::string& a, std::string_view b) {
-        return a.size() == b.size() &&
-               std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-                   return std::tolower(static_cast<unsigned char>(x)) ==
-                          std::tolower(static_cast<unsigned char>(y));
-               });
-    };
-
-    std::vector<FileSys::VirtualDir> dirs{exefs_dir};
-    auto dir = exefs_dir;
-    for (std::size_t depth = 0; depth < 8; ++depth) {
-        const auto parent = dir->GetParentDirectory();
-        if (parent == nullptr) {
-            break;
-        }
-        const auto& name = parent->GetName();
-        if (const auto control = parent->GetSubdirectory("control")) {
-            if (prefer_edition) {
-                if (const auto edition = control->GetSubdirectory("Acd_1")) {
-                    dirs.push_back(edition);
-                }
-            }
-            dirs.push_back(control);
-        }
-        dirs.push_back(parent);
-        const bool storage_level =
-            equals_ignore_case(name, "base") || equals_ignore_case(name, "update") ||
-            equals_ignore_case(name, "updates") || equals_ignore_case(name, "upgrade") ||
-            equals_ignore_case(name, "program") ||
-            (!name.empty() && name.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos);
-        if (!storage_level) {
-            break;
-        }
-        dir = parent;
-    }
-    return dirs;
 }
 
 } // namespace

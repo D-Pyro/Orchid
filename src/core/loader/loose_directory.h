@@ -62,8 +62,21 @@ inline std::optional<fs::path> ProgramMain(const fs::path& programs) {
     if (programs.empty()) {
         return std::nullopt;
     }
+    // Consolidated cross-generation layouts may pass the `program1` package itself as the
+    // target (`<storage>/<version>/program1/exefs/main`).
+    if (NameIs(programs, "program1")) {
+        if (const auto main = PackageMain(programs)) {
+            return main;
+        }
+    }
     for (const auto index : {"1", "0"}) {
         if (const auto main = PackageMain(programs / index)) {
+            return main;
+        }
+    }
+    // ... or keep `program1` beside the numbered programs (`program/1`, `program/0`).
+    if (const auto program1 = Subdirectory(programs, "program1"); !program1.empty()) {
+        if (const auto main = PackageMain(program1)) {
             return main;
         }
     }
@@ -115,6 +128,12 @@ inline std::optional<std::filesystem::path> ResolveLooseProgramPath(
                                                            : Subdirectory(directory, "upgrade");
         !upgrades.empty()) {
         for (const auto& version : NewestDirectories(upgrades)) {
+            // Same consolidated cross-generation layouts as updates/ below.
+            if (const auto program1 = Subdirectory(version, "program1"); !program1.empty()) {
+                if (const auto main = PackageMain(program1)) {
+                    return main;
+                }
+            }
             if (const auto main = ProgramMain(Subdirectory(version, "program"))) {
                 return main;
             }
@@ -142,6 +161,15 @@ inline std::optional<std::filesystem::path> ResolveLooseProgramPath(
             const auto parsed = std::from_chars(name.data(), name.data() + name.size(), number);
             if (name.empty() || parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size()) {
                 continue;
+            }
+            // Consolidated cross-generation dumps ship the updated program as
+            // updates/<version>/program1 (companion exefs/romfs/control beside it).
+            // A program1 without an ExeFS (or an empty one) resolves to nothing here and
+            // falls through to the numbered program layouts below.
+            if (const auto program1 = Subdirectory(version, "program1"); !program1.empty()) {
+                if (const auto main = PackageMain(program1)) {
+                    return main;
+                }
             }
             if (const auto main = ProgramMain(Subdirectory(version, "program"))) {
                 return main;
@@ -173,9 +201,18 @@ inline std::optional<std::filesystem::path> LooseGameRootFromMain(
     if (NameIs(package, "exefs")) {
         package = package.parent_path();
     }
-    if ((NameIs(package, "0") || NameIs(package, "1")) &&
-        NameIs(package.parent_path(), "program")) {
-        auto root = package.parent_path().parent_path();
+    // Program packages live either inside the numbered `program/<index>` wrapper or as
+    // the consolidated `program1` package folder itself — next to the version folder
+    // (`updates/<version>/program1`) or beside the numbered programs (`program/program1`).
+    const bool in_program_wrapper = NameIs(package.parent_path(), "program") &&
+                                    (NameIs(package, "0") || NameIs(package, "1") ||
+                                     NameIs(package, "program1"));
+    if (in_program_wrapper || NameIs(package, "program1")) {
+        // Inside the wrapper needs two steps (program/<index>); a consolidated
+        // `program1` package unwinds alone in one. Either way the root keeps dlc/ and
+        // sidecar assets associated with the same game root.
+        auto root =
+            in_program_wrapper ? package.parent_path().parent_path() : package.parent_path();
         if (NameIs(root.parent_path(), "upgrade") || NameIs(root.parent_path(), "updates")) {
             root = root.parent_path().parent_path();
         } else if (NameIs(root, "base")) {

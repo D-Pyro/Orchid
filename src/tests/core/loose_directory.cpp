@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+﻿// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <catch2/catch_test_macros.hpp>
@@ -40,6 +40,75 @@ struct LooseTestDirectory {
     }
 };
 } // namespace
+
+TEST_CASE("Loose consolidated cross-generation program1 layouts resolve to the native program",
+          "[loose_directory]") {
+    LooseTestDirectory t;
+    const auto game = t.root / fs::path{u8"Kirby 星のカービィ"};
+    const auto version = game / "updates/65536";
+    const auto program1 = version / "program1";
+    // Consolidated cross-generation update package: the program folder is the package
+    // itself, with its ExeFS beside a structurally empty RomFS placeholder.
+    LooseTestDirectory::ExeFS(program1 / "exefs");
+    LooseTestDirectory::Put(program1 / "romfs/Empty", "");
+    LooseTestDirectory::ExeFS(game / "base/exefs", "base");
+    LooseTestDirectory::Put(game / "base/romfs/data.bin", "basedata");
+
+    for (const auto& directory : {game, program1, program1 / "exefs"}) {
+        CHECK(Loader::ResolveLooseProgramPath(directory) == program1 / "exefs/main");
+    }
+    // The game root carries dlc/ and sidecars: unwinding package, program1 and version
+    // folder must land here and not at the update package.
+    CHECK(Loader::LooseGameRootFromMain(program1 / "exefs/main") == game);
+    auto main = Core::GetGameFileFromPath(std::make_shared<FileSys::RealVfsFilesystem>(),
+                                          Common::FS::PathToUTF8String(game));
+    REQUIRE(main);
+    CHECK(main->ReadAllBytes() == std::vector<u8>{'m', 'a', 'i', 'n'});
+    main.reset();
+
+    SECTION("upgrade alias") {
+        LooseTestDirectory::ExeFS(game / "upgrade/65536/program1/exefs", "upgrade program1");
+        fs::remove_all(game / "updates");
+        CHECK(Loader::ResolveLooseProgramPath(game) ==
+              game / "upgrade/65536/program1/exefs/main");
+        CHECK(Loader::LooseGameRootFromMain(game / "upgrade/65536/program1/exefs/main") == game);
+    }
+    SECTION("empty program1 falls back") {
+        fs::remove(program1 / "exefs/main.npdm");
+        // An incomplete program1 is not selected and does not throw; the complete base
+        // package still resolves.
+        CHECK(Loader::ResolveLooseProgramPath(game) == game / "base/exefs/main");
+        CHECK_FALSE(Loader::ResolveLooseProgramPath(program1));
+    }
+    SECTION("base directory is structured") {
+        const auto base = game / "base";
+        // The complete consolidated program1 under updates/ keeps winning until removed.
+        fs::remove_all(game / "updates");
+        fs::remove_all(base / "exefs");
+        LooseTestDirectory::ExeFS(base / "program/0/exefs", "structured base");
+        CHECK(Loader::ResolveLooseProgramPath(game) == base / "program/0/exefs/main");
+        CHECK(Loader::LooseGameRootFromMain(base / "program/0/exefs/main") == game);
+    }
+}
+
+TEST_CASE("Loose consolidated program1 beside numbered programs resolves and keeps the game root",
+          "[loose_directory]") {
+    LooseTestDirectory t;
+    const auto game = t.root / "Game";
+    const auto programs = game / "upgrade/65536/program";
+    // A numbered program wins while complete; the consolidated package takes over once
+    // the numbered programs cannot provide a full ExeFS.
+    LooseTestDirectory::ExeFS(programs / "1/exefs", "numbered");
+    LooseTestDirectory::ExeFS(programs / "program1/exefs", "consolidated");
+    CHECK(Loader::ResolveLooseProgramPath(game) == programs / "1/exefs/main");
+
+    LooseTestDirectory::ExeFS(programs / "0/exefs", "zero");
+    CHECK(Loader::ResolveLooseProgramPath(game) == programs / "1/exefs/main");
+    fs::remove(programs / "1/exefs/main.npdm");
+    fs::remove(programs / "0/exefs/main.npdm");
+    CHECK(Loader::ResolveLooseProgramPath(game) == programs / "program1/exefs/main");
+    CHECK(Loader::LooseGameRootFromMain(programs / "program1/exefs/main") == game);
+}
 
 TEST_CASE("Loose edition folders prefer a complete native program and retain legacy fallback",
           "[loose_directory]") {
