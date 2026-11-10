@@ -173,10 +173,7 @@ void BufferCache<P>::TickFrame() {
     ++frame_tick;
     delayed_destruction_ring.Tick();
 
-    for (auto& buffer : async_buffers_death_ring) {
-        runtime.FreeDeferredStagingBuffer(buffer);
-    }
-    async_buffers_death_ring.clear();
+    ReleaseCompletedAsyncBuffers();
 }
 
 template <class P>
@@ -755,6 +752,10 @@ bool BufferCache<P>::ShouldWaitAsyncFlushes() const noexcept {
 
 template <class P>
 void BufferCache<P>::CommitAsyncFlushesHigh() {
+    // A frame may contain thousands of readbacks. Reclaim those whose fence and guest copy
+    // have completed before allocating another, even when no new frame has been presented.
+    // PopAsyncBuffers runs on the fencing thread: it must not mutate the shared staging pool.
+    ReleaseCompletedAsyncBuffers();
     AccumulateFlushes();
 
     if (committed_gpu_modified_ranges.empty()) {
@@ -858,6 +859,20 @@ void BufferCache<P>::CommitAsyncFlushesHigh() {
     pending_downloads.emplace_back(std::move(normalized_copies));
     pending_download_ranges.emplace_back(std::move(download_ranges));
     async_buffers.emplace_back(download_staging);
+    pending_async_download_bytes += download_staging.mapped_span.size();
+}
+
+template <class P>
+bool BufferCache<P>::WaitAsyncFlushBudget(std::stop_token stop_token, size_t budget) {
+    std::unique_lock lock{mutex};
+    if (pending_async_download_bytes < budget) {
+        return !stop_token.stop_requested();
+    }
+    // One newly committed batch may exceed the soft budget. Its fence is submitted before
+    // the next call waits, and releasing the cache lock lets the fencing thread copy it out.
+    return async_download_progress.wait(lock, stop_token, [this, budget] {
+        return pending_async_download_bytes < budget;
+    }) && !stop_token.stop_requested();
 }
 
 template <class P>
@@ -868,6 +883,18 @@ void BufferCache<P>::CommitAsyncFlushes() {
 template <class P>
 void BufferCache<P>::PopAsyncFlushes() {
     PopAsyncBuffers();
+}
+
+template <class P>
+void BufferCache<P>::ReleaseCompletedAsyncBuffers() {
+    for (auto& buffer : async_buffers_death_ring) {
+        if constexpr (requires { runtime.FreeCompletedDeferredStagingBuffer(buffer); }) {
+            runtime.FreeCompletedDeferredStagingBuffer(buffer);
+        } else {
+            runtime.FreeDeferredStagingBuffer(buffer);
+        }
+    }
+    async_buffers_death_ring.clear();
 }
 
 template <class P>
@@ -903,6 +930,8 @@ void BufferCache<P>::PopAsyncBuffers() {
         });
     }
     async_buffers_death_ring.emplace_back(*async_buffer);
+    pending_async_download_bytes -= async_buffer->mapped_span.size();
+    async_download_progress.notify_all();
     async_buffers.pop_front();
     pending_downloads.pop_front();
     pending_download_ranges.pop_front();

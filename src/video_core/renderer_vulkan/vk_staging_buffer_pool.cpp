@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <cstdlib>
 #include <utility>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "common/common_types.h"
 #include "common/div_ceil.h"
 #include "common/literals.h"
+#include "common/logging.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_staging_buffer_pool.h"
 #include "video_core/vulkan_common/vulkan_device.h"
@@ -94,6 +96,8 @@ StagingBufferPool::StagingBufferPool(const Device& device_, MemoryAllocator& mem
     : device{device_}, memory_allocator{memory_allocator_}, scheduler{scheduler_},
       stream_buffer_size{GetStreamBufferSize(device)}, region_size{stream_buffer_size /
                                                                    StagingBufferPool::NUM_SYNCS} {
+    const char* trace = std::getenv("EDEN_TRACE_STAGING");
+    trace_staging = trace && trace[0] == '1';
     VkBufferCreateInfo stream_ci = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext = nullptr,
@@ -132,6 +136,15 @@ StagingBufferRef StagingBufferPool::Request(size_t size, MemoryUsage usage, bool
 }
 
 void StagingBufferPool::FreeDeferred(StagingBufferRef& ref) {
+    ReleaseDeferred(ref, scheduler.CurrentTick());
+}
+
+void StagingBufferPool::FreeCompletedDeferred(StagingBufferRef& ref) {
+    // Unlike a just-recorded upload, a completed readback has no pending GPU use.
+    ReleaseDeferred(ref, 0);
+}
+
+void StagingBufferPool::ReleaseDeferred(StagingBufferRef& ref, u64 last_use_tick) {
     auto& entries = GetCache(ref.usage)[ref.size_class].entries;
     const auto is_this_one = [&ref](const StagingBuffer& entry) {
         return entry.index == ref.index;
@@ -139,7 +152,7 @@ void StagingBufferPool::FreeDeferred(StagingBufferRef& ref) {
     auto it = std::find_if(entries.begin(), entries.end(), is_this_one);
     ASSERT(it != entries.end());
     ASSERT(it->deferred);
-    it->tick = scheduler.CurrentTick();
+    it->tick = last_use_tick;
     it->frame = frame;
     it->deferred = false;
 }
@@ -267,6 +280,7 @@ std::optional<StagingBufferRef> StagingBufferPool::TryGetReservedBuffer(u32 size
 
 StagingBufferRef StagingBufferPool::CreateStagingBuffer(size_t size, MemoryUsage usage, bool deferred) {
     const u32 size_class = SizeClass(size);
+    TraceAllocation(size, ClassSize(size_class), usage, deferred);
     VkBufferCreateInfo buffer_ci = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext = nullptr,
@@ -307,7 +321,65 @@ StagingBufferRef StagingBufferPool::CreateStagingBuffer(size_t size, MemoryUsage
         .frame = frame,
         .deferred = deferred,
     });
+    if (trace_staging) {
+        trace_cached_bytes += ClassSize(size_class);
+    }
     return entry.Ref();
+}
+
+void StagingBufferPool::TraceAllocation(size_t requested, size_t rounded, MemoryUsage usage,
+                                      bool deferred) {
+    // Log before allocating, even when the allocation fails or no frame ever completes.
+    // Counters describe logical buffer sizes, not driver allocation/residency sizes.
+    if (!trace_staging || trace_reports >= 256) {
+        return;
+    }
+    const size_t projected = trace_cached_bytes + rounded;
+    const bool growth = projected > trace_high_water && projected - trace_high_water >= 128_MiB;
+    const bool large = rounded >= 64_MiB && trace_large_reports < 8;
+    if (trace_reports != 0 && !growth && !large) {
+        return;
+    }
+    ++trace_reports;
+    trace_large_reports += large;
+    trace_high_water = std::max(trace_high_water, projected);
+    const u64 gpu_tick = scheduler.GetMasterSemaphore().KnownGpuTick();
+    struct Totals {
+        size_t bytes{};
+        size_t deferred{};
+        size_t inflight{};
+        size_t count{};
+    };
+    const auto summarize = [gpu_tick](const StagingBuffersCache& cache) {
+        Totals total;
+        for (const auto& level : cache) {
+            for (const auto& entry : level.entries) {
+                const size_t bytes = ClassSize(entry.size_class);
+                total.bytes += bytes;
+                ++total.count;
+                if (entry.deferred) {
+                    total.deferred += bytes;
+                } else if (entry.tick > gpu_tick) {
+                    total.inflight += bytes;
+                }
+            }
+        }
+        return total;
+    };
+    const auto upload = summarize(upload_cache);
+    const auto download = summarize(download_cache);
+    const auto local = summarize(device_local_cache);
+    LOG_WARNING(Render_Vulkan,
+                "Staging allocation preflight #{}: requested={} rounded={} usage={} deferred={} "
+                "frame={} current_tick={} gpu_tick={} stream_bytes={} "
+                "upload(bytes/deferred/inflight/count)={}/{}/{}/{} "
+                "download={}/{}/{}/{} device_local={}/{}/{}/{}",
+                trace_reports, requested, rounded, static_cast<u32>(usage), deferred, frame,
+                scheduler.CurrentTick(), gpu_tick, stream_buffer_size,
+                upload.bytes, upload.deferred, upload.inflight, upload.count,
+                download.bytes, download.deferred, download.inflight, download.count,
+                local.bytes, local.deferred, local.inflight, local.count);
+    LogMemoryStatistics(device);
 }
 
 StagingBufferPool::StagingBuffersCache& StagingBufferPool::GetCache(MemoryUsage usage) {
@@ -331,6 +403,9 @@ void StagingBufferPool::ReleaseCache(StagingBuffersCache& cache, size_t& deletio
             return false;
         }
         --deletions_left;
+        if (trace_staging) {
+            trace_cached_bytes -= ClassSize(entry.size_class);
+        }
         return true;
     };
     // Largest first: they hold the most memory.

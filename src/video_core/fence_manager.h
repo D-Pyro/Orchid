@@ -81,8 +81,16 @@ public:
         uncommitted_operations.emplace_back(std::move(func));
     }
 
-    void SignalFence(std::function<void()>&& func) {
+    /// False only when shutdown cancelled the request before its callback was queued.
+    bool SignalFence(std::function<void()>&& func) {
         Nx2Profile::Scope profile_scope{Nx2Profile::Zone::Fence};
+        if constexpr (can_async_check) {
+            // No cache/queue locks are held here. The fencing thread must remain able to
+            // finish older readbacks while the producer waits for download memory.
+            if (!buffer_cache.WaitAsyncFlushBudget(gpu.GetShutdownToken())) {
+                return false;
+            }
+        }
         const bool delay_fence = Settings::IsGPUFenceBehaviorDefault() ? Settings::IsGPULevelHigh() : Settings::IsGPUFenceBehaviorBalanced() || Settings::IsGPUFenceBehaviorAccurate();
         if constexpr (!can_async_check) {
             TryReleasePendingFences<false>();
@@ -101,7 +109,7 @@ public:
             SCOPE_EXIT { gpu.EndAsyncGuestWrite(); };
             func();
             rasterizer.InvalidateGPUCache();
-            return;
+            return true;
         }
         skipped_fences = 0;
         should_flush |= query_cache.HasUncommittedFlushes();
@@ -135,6 +143,7 @@ public:
             cv.notify_all();
         }
         rasterizer.InvalidateGPUCache();
+        return true;
     }
 
     void SignalSyncPoint(u32 value) {
@@ -165,7 +174,9 @@ public:
                 wait_finished.store(true, std::memory_order_relaxed);
                 wait_cv.notify_all();
             });
-            SignalFence(std::move(func));
+            if (!SignalFence(std::move(func))) {
+                return;
+            }
             std::unique_lock lk(wait_mutex);
             wait_cv.wait(
                 lk, [&wait_finished] { return wait_finished.load(std::memory_order_relaxed); });

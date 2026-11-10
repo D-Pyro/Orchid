@@ -166,6 +166,26 @@ public:
         });
     }
 
+    /// Enumerate preflushable bytes within the query without clearing the persistent page marks.
+    template <typename Func>
+    void ForEachPreflushableRange(VAddr query_cpu_addr, u64 query_size, Func&& func) {
+        IteratePages<false>(query_cpu_addr, query_size,
+                            [&func](Manager* manager, u64 offset, size_t size) {
+            const VAddr begin = manager->cpu_addr + offset;
+            const VAddr end = begin + size;
+            // WordManager reports whole marked pages. Clip to this manager's part of the
+            // requested write so unaligned endpoints never download bytes outside it.
+            manager->ForEachModifiedRange(Type::Preflushable, false, begin, size,
+                                          [&](VAddr address, u64 length) {
+                const VAddr clipped_begin = (std::max)(begin, address);
+                const VAddr clipped_end = (std::min)(end, address + length);
+                if (clipped_begin < clipped_end) {
+                    func(clipped_begin, clipped_end - clipped_begin);
+                }
+            });
+        });
+    }
+
     /// Call 'func' for each GPU modified range and unmark those pages as GPU modified
     template <typename Func>
     void ForEachDownloadRange(VAddr query_cpu_range, u64 query_size, bool clear, Func&& func) {

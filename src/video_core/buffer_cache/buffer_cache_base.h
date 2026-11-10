@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <condition_variable>
 #include <cstdlib>
 #include <functional>
 #include <memory>
@@ -17,6 +18,7 @@
 #include <optional>
 #include <source_location>
 #include <span>
+#include <stop_token>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -337,6 +339,9 @@ public:
     void CommitAsyncFlushes();
     void CommitAsyncFlushesHigh();
 
+    /// Called without cache locks; cancellation leaves outstanding downloads intact.
+    bool WaitAsyncFlushBudget(std::stop_token stop_token, size_t budget = 256 * 1024 * 1024);
+
     /// Pop asynchronous downloads
     void PopAsyncFlushes();
     void PopAsyncBuffers();
@@ -490,6 +495,9 @@ public:
     }
 
 private:
+    /// Recycle completed readbacks on the GPU owner thread with mutex held.
+    void ReleaseCompletedAsyncBuffers();
+
     template <typename Func>
     static void ForEachEnabledBit(u32 enabled_mask, Func&& func) {
         for (u32 index = 0; enabled_mask != 0; ++index, enabled_mask >>= 1) {
@@ -708,15 +716,14 @@ private:
                Tegra::Nx2NeedsBufferDownloads();
     }
 
-    /// Whether a GPU write to this range is copied back at the next fence. Ranges the guest CPU
-    /// has read (Preflushable, set by the first reactive flush) always are: later reads skip the
-    /// flush and rely on these downloads, e.g. collision meshes skinned by compute shaders.
+    /// Whether full async downloads are enabled or any part of this write is Preflushable.
+    /// Previously CPU-read pages need fence downloads, e.g. collision meshes skinned by compute.
     bool DownloadsAtFence(DAddr device_addr, u64 size) noexcept {
         return AsyncBufferDownloads() || memory_tracker.IsRegionPreflushable(device_addr, size);
     }
 
     /// Whether QueueDownload(addr, size) copies any part of the range back at the next fence:
-    /// all of it (DownloadsAtFence), or the pages of it the guest CPU has read.
+    /// full async downloads, overlapping Preflushable pages, or known CPU-read ranges.
     bool HasFenceDownload(DAddr device_addr, u64 size) {
         if (DownloadsAtFence(device_addr, size)) {
             return true;
@@ -766,10 +773,16 @@ private:
     /// Queues the parts of a GPU write to [addr, addr + size) that are copied back at the next
     /// fence.
     void QueueDownload(DAddr addr, u64 size) {
-        if (DownloadsAtFence(addr, size)) {
+        if (AsyncBufferDownloads()) {
             uncommitted_gpu_modified_ranges.Add(addr, size);
             return;
         }
+        // A CPU-read page inside a guessed 8 MiB compute write does not make the rest of
+        // that write CPU-visible. Queue only the marked intersections, retaining read traps
+        // so a first CPU read of any remaining page still downloads its current contents.
+        memory_tracker.ForEachPreflushableRange(addr, size, [this](DAddr start, u64 length) {
+            uncommitted_gpu_modified_ranges.Add(start, length);
+        });
         cpu_read_ranges.ForEachInRange(addr, size, [this](DAddr start, DAddr end) {
             uncommitted_gpu_modified_ranges.Add(start, end - start);
         });
@@ -793,6 +806,8 @@ private:
 
     // Async Buffers
     std::deque<std::optional<Async_Buffer>> async_buffers;
+    size_t pending_async_download_bytes{};
+    std::condition_variable_any async_download_progress;
     std::deque<boost::container::small_vector<BufferCopy, 4>> pending_downloads;
     /// For each entry of pending_downloads: the ranges it still writes to guest memory when its
     /// fence pops. A write to a range after a download was taken removes it from that download

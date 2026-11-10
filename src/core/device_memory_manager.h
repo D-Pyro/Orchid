@@ -151,8 +151,11 @@ private:
     /// them (the GPU thread, the fencing thread, service threads): one cache shared by all was
     /// cleared by Map on a service thread between the GPU thread's null check of an entry and
     /// its use, and the GPU thread copied from address 0 (title 1 crashed every few minutes).
+    struct TranslationIdentity {};
     struct TranslationCache {
-        const void* owner{};
+        // Retaining only this token prevents address reuse from identifying a new manager as
+        // the old one, including on threads that outlive either manager.
+        std::shared_ptr<const TranslationIdentity> owner_identity;
         u64 generation{};
         std::array<TranslationEntry, 4> slots{};
         u32 cursor{};
@@ -162,8 +165,9 @@ private:
     /// This thread's translations, emptied when Map or Unmap ran since they were made.
     TranslationCache& Translations() {
         const u64 current = translation_generation.load(std::memory_order_acquire);
-        if (t_cache.owner != this || t_cache.generation != current) {
-            t_cache = TranslationCache{.owner = this, .generation = current};
+        if (t_cache.owner_identity != translation_identity || t_cache.generation != current) {
+            t_cache = TranslationCache{.owner_identity = translation_identity,
+                                       .generation = current};
         }
         return t_cache;
     }
@@ -244,6 +248,8 @@ private:
         tracked_entries.GetUnchecked(page_index).cpu_backing_address = address | (asid.id << asid_start_bit);
     }
 
+    const std::shared_ptr<const TranslationIdentity> translation_identity =
+        std::make_shared<const TranslationIdentity>();
     std::atomic<u64> translation_generation{1}; ///< Bumped by Map and Unmap
     using CounterType = u8;
     using CounterAtomicType = std::atomic_uint8_t;
