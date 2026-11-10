@@ -80,7 +80,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          cmake --build build/tests --target tests dynarmic_tests --parallel
+          cmake --build build/tests --target tests dynarmic_tests --parallel -- -k 0
           sccache --show-stats
 
       - name: Run tests

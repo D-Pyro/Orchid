@@ -205,9 +205,9 @@ class CountingNupFile final : public FileSys::VectorVfsFile {
 public:
     using VectorVfsFile::VectorVfsFile;
 
-    std::size_t Read(u8* data, std::size_t length, std::size_t offset) const override {
+    std::size_t Read(u8* out, std::size_t length, std::size_t offset) const override {
         ++reads;
-        return VectorVfsFile::Read(data, length, offset);
+        return VectorVfsFile::Read(out, length, offset);
     }
 
     mutable std::size_t reads{};
@@ -757,7 +757,7 @@ TEST_CASE("NUP packs the preferred edition program with its family DLC", "[nup]"
     REQUIRE(nup.GetPackages().size() == 3);
     REQUIRE(nup.GetPackages()[0].kind == NupContainer::PackageKind::Base);
     REQUIRE(nup.GetPackages()[0].title_id == native_id);
-    REQUIRE(nup.FindBasePackage() == 0);
+    REQUIRE(nup.FindBasePackage() == std::size_t{0});
     REQUIRE_FALSE(nup.FindBestUpdatePackage());
     REQUIRE(Read(nup.GetExeFSDir(0)->GetFile("main")) == "native program 1");
     REQUIRE(PackedTree(nup.GetRomFSDir(0)) == SourceTree(programs / "1/romfs"));
