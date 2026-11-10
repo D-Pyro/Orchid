@@ -104,7 +104,7 @@ Compared with the Eglantine it started from:
 | Star Fox | 60 |  |
 | Pokémon Pokopia | 60 | |
 | Orbitals | 30 | Background Texture flickering |
-| Kirby Air Riders | | crashes while loading a race |
+| Kirby Air Riders |DO NOT PLAY MOST LIKELY CRASHES YOUR PC 30 SECONDS IN A RACE|
 
 ## Download
 
