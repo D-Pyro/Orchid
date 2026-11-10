@@ -133,6 +133,38 @@ not use the default `low`; it is clearly weaker at computer use.
   did not cover subtle rendering artifacts or reading small status-bar text; check those
   yourself until a harder test says otherwise.
 
+### Harness facts every test brief relies on (`orchid` MCP)
+
+- A route belongs to the snapshot (save state) it was recorded on. `route_list` shows it, `boot`
+  takes it as `snapshot=...`, and `route_play` refuses a session booted from another one. From the
+  default `initial` (a fresh save) the same inputs end in tutorials and intros.
+
+  | Game | Snapshot | Route | Ends in |
+  |---|---|---|---|
+  | Mario Tennis Fever | `mtf-after-first-practice-20261107` | `mtf-mario-yoshi-stadium-match-v1` | Free Play match, several points played |
+  | Donkey Kong Bananza | `bananza-leon-import-20261107` | `bananza-leon-tunnel-entry-v3` | mining tunnel, HUD checkpoint |
+  | Yoshi and the Mysterious Book | `yoshi-chapter-one-saved-20261106-2114` | `yoshi-wildwoods-entry-v1` | Wildwoods level, Yoshi controllable |
+  | Orbitals | `initial` | none: wait 60 s, then A, DDOWN x3, A, A, A, A (2 s apart), accept the EULA | main menu |
+
+- `route_play` waits by itself until 35 s after boot before the first input (the routes were
+  recorded with that lead-in). Routes are timed inputs: only Bananza ends with a checkpoint, so
+  look at the last screenshot to confirm where a run ended.
+- `boot` returns `out`, the run directory. Screenshots are saved there as `NNNN-<name>.png`, frame
+  times as `frames/*.csv` (column `frame_ms`, one row per guest frame). The log is what the `log`
+  and `wait_log` tools read; on disk it is `<out>/profile/data/eden/log/orchid_<tag>_<title id>.txt`,
+  and after `stop` a copy lies at `<out>/eden_log.txt`. The `eden_log.txt` inside `profile/` is an
+  old log from the seed, not this run.
+- The games run in a private throwaway profile without network. In-game dialogs (EULA, tutorials)
+  are part of the game: accept and continue.
+- In the brief, say that every reported screenshot must be opened and described, and that an
+  obstacle in one run is a result to write down, not a reason to skip the remaining runs. When a
+  number or a log count decides the outcome, check it against the log yourself.
+- The harness lives in `~/.local/share/codex-orchid-mcp/` (not in this repository). A running MCP
+  server keeps the code it started with; changes there reach a session only after its restart.
+  Checkpoint reference images are stored in `state/checkpoints/`; five older checkpoints lost
+  theirs with deleted run directories and must be recorded again before use
+  (`mtf-title-menu-v1`, `pokopia-cave-walking-v1`, `air-startup-loading-v1`, both `hw-*`).
+
 ### Mario Tennis Fever regression gate: play a Free Play match
 
 The gate before pushing emulator changes (after tests pass, fork-scan ports, perf or graphics
@@ -142,8 +174,9 @@ changes) is a real match, not the main menu. Do not use the title/main-menu smok
 - Start Mario Tennis Fever, go to Free Play, Singles, Quick Play (7 points), Stadium Court
   (Grass), Mario against a CPU opponent, and play several points (serves, rallies, point
   transitions). The saved route `mtf-mario-yoshi-stadium-match-v1` (`route_play` in the `orchid`
-  MCP, 47 steps) does this; re-record it if the game binding no longer matches. About five
-  minutes in total.
+  MCP, 47 steps) does this when the session was booted with
+  `snapshot="mtf-after-first-practice-20261107"`; re-record it if the game binding no longer
+  matches. About five minutes in total.
 - Pass only if all of this holds: both players, court, crowd, effects and scoreboard render;
   text has no missing glyphs; the match runs through a point change without a hang, crash or
   device loss; the log shows no new errors compared with the last good build; and the native
