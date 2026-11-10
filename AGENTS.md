@@ -61,3 +61,117 @@ while PGO builds retain LLD. Consult per-job build durations and cache statistic
 in Actions summaries before claiming a CI speedup. Local timings do not establish
 hosted-runner performance. Do not cancel or restart an important running release
 to apply build optimizations; prepare them for subsequent runs.
+
+# Orchid agent workflow
+
+## Orchid: automatische Mutationsprüfung bei Agent-Tests
+
+Gilt für `/home/leon/src/Eglantine`, dessen Worktrees (auch unter `.t3/worktrees/`
+und `Documents/Codex/`) und andere Checkouts von MythosOfs/Orchid.
+Bei Orchid-Änderungen an Produktionscode oder Unit-Tests die Mutationsprüfung
+selbstständig als verpflichtenden Teil der Abschlussverifikation ausführen, ohne
+Erinnerung, gesonderten Auftrag oder Rückfrage an Leon. Das gilt auch für Subagents
+und automatische Issue-, Review-/Merge- und Forkscan-Läufe, wenn sie solchen Code ändern.
+Passenden Catch2-Filter, Build-Ordner und Diff-Basis selbst bestimmen; bei reinen
+Teständerungen die betroffene Produktionsdatei mit `--file` auswählen.
+Für diese Verifikation verbindlich den lokalen Runner verwenden:
+
+```sh
+orchid-agent-test -- "<passender Catch2-Filter>"
+# Andere Build-Verzeichnisse oder bereits committete Änderungen:
+orchid-agent-test --build-dir build-local --base origin/main -- "<Filter>"
+# Bei reinen Teständerungen die zugehörige Produktionsdatei angeben:
+orchid-agent-test --file src/common/example.h -- "<Filter>"
+```
+
+Der Runner baut und testet zuerst normal, danach automatisch eine begrenzte Auswahl
+von Produktionscode-Mutationen mit dumbmutate in einer privaten Quellkopie.
+Standard: maximal drei geänderte Zeilen, mindestens 80 % erkannte gültige Mutanten.
+`--base HEAD` erfasst unstaged, staged und neue Produktionsdateien; für committete
+Branch-Änderungen die fachlich passende Basis explizit übergeben.
+Direkte `build/bin/tests`-Aufrufe bleiben für schnelle Diagnose erlaubt, ersetzen
+aber nicht diesen Abschlusslauf. Exit 1 = Mutation-Score unter Schwelle;
+Exit 2 = fehlgeschlagene Baseline oder unvollständige/inkonklusive Prüfung.
+Keine passenden Mutationen gilt nicht als bestandene Mutationsprüfung. Überlebende
+Mutanten untersuchen: Test ergänzen oder Verhaltensäquivalenz konkret begründen;
+die Schwelle nicht bloß zum Grünwerden senken. Teilprüfung (Dateien/Zeilenbudget)
+im Ergebnis nennen; sie garantiert keine vollständige Fehlerfreiheit.
+Berichte: `/home/leon/Orchid/orchid-issues/mutation/<Lauf>/`.
+Private Builds unter `~/.cache/orchid-mutation/` nicht ausliefern oder direkt starten.
+Die private Kopie übernimmt den aktuellen Build per Btrfs-Reflink; bubblewrap
+erhält dessen absolute Pfade in einer eigenen Mount-Umgebung. Nur betroffene
+Dateien müssen für Mutanten neu gebaut werden. Zeitlimit pro Zeile: 10 Minuten;
+Timeouts gelten als unvollständig. Ein veralteter normaler Build wird zuerst aktualisiert.
+Installation/Quellen: `~/.local/share/orchid-mutation/`, Engine:
+`~/.local/share/orchid-dumbmutate/`. Keine Git-Hooks oder globalen Compilerflags.
+
+Ninja-Diagnosen (`-n`, `-t`) ebenfalls nicht parallel auf dasselbe Orchid-Build-Verzeichnis richten;
+auch Diagnoseaufrufe können beschädigte Ninja-Logdateien verändern.
+
+## Orchid-Testshortcuts richtig anlegen (Leon testet selbst)
+
+Ein Shortcut gilt erst als fertig, wenn sein exakter `Exec` mit `--check` durchläuft. Leon soll nie zweimal klicken müssen.
+
+1. Datei `~/.local/share/applications/orchid-test-<label>.desktop`:
+   ```ini
+   [Desktop Entry]
+   Type=Application
+   Name=Orchid <label> (Test)
+   Exec=env EDEN_XYZ=1 /home/leon/.local/bin/orchid-test-run <label> <absoluter Pfad zu AppImage oder build*/bin/orchid> %f
+   Icon=orchid
+   Terminal=false
+   Categories=Game;Emulator;
+   X-Orchid-Test=true
+   ```
+   Env-Schalter nur über `env VAR=wert` vor `orchid-test-run` setzen. Pfade mit Leerzeichen in `"..."`. Kein `QT_QPA_PLATFORM` und kein `DISPLAY` setzen, das macht `orchid-test-run`.
+2. Prüfen, alle drei müssen grün sein:
+   ```sh
+   desktop-file-validate ~/.local/share/applications/orchid-test-<label>.desktop
+   ex=$(sed -n 's/^Exec=//p' <datei> | sed 's/ %f$//; s#orchid-test-run #orchid-test-run --check #'); eval "$ex"   # -> "check ok"
+   ldd <binary> | grep 'not found'    # muss leer sein (bei AppImages entfällt das)
+   ```
+3. `update-desktop-database ~/.local/share/applications`.
+
+Warum (Stand 2026-11-07): Hyprland 0.56 stellt Xwayland nur als `/tmp/.X11-unix/X0_` bereit, Qt-xcb sucht aber `X0` und bricht dann nach 0,5 s mit Exit 134 ab. Das sieht so aus, als würde der Shortcut nicht starten. `orchid-test-run` legt den Link `X0 -> X0_` jetzt selbst an, prüft das Display mit `xprop` und meldet Startfehler als Desktop-Benachrichtigung. Startet ein Test trotzdem nicht: `coredumpctl list` und `~/orchid-perf/<neuester>/meta.txt` (Exit-Code) ansehen.
+
+## Orchid: Worktrees und Builds nach Abschluss aufräumen
+
+Sobald eine Orchid-Aufgabe fertig ist und ihr Worktree/Build nicht mehr gebraucht wird, räumt
+der Agent selbst auf, ohne Rückfrage (Leon 2026-11-08). Gilt für Worktrees unter
+`~/.t3/worktrees/Eglantine/`, `~/src/Eglantine-*`, `~/src/Eglantine/.claude/worktrees/`,
+`~/Documents/Codex/*/work/`, für deren `build*/`-Ordner, Test-Binaries unter
+`~/Orchid/orchid-builds/` und private Builds unter `~/.cache/orchid-mutation/`.
+
+- Entfernen nur, wenn alles gesichert ist: `git status` ohne Code-Änderungen (nur Logs/Builds),
+  `git rev-list HEAD --not --remotes` leer, kein Prozess mit cwd/Binary darin, kein
+  `orchid-test-*.desktop` zeigt darauf, kein laufender T3-Thread arbeitet darin.
+- Dann `git -C /home/leon/src/Eglantine worktree remove --force <pfad>`, lokalen Branch löschen
+  (Tipp liegt auf dem Remote), `git worktree prune`.
+- Worktrees mit ungesicherter Arbeit bleiben; deren alte `build*/`-Ordner dürfen weg (ccache baut neu).
+- Test-Binaries in `~/Orchid/orchid-builds/` löschen, sobald Leon mit dem Test durch ist
+  (zusammen mit den `orchid-test-*.desktop`-Shortcuts). Spieldaten (`.nup`, Dumps) nicht.
+- Nicht anfassen: Haupt-Checkout `~/src/Eglantine` und dessen `build/`, Worktrees fremder Repos
+  (z.B. `~/Development/Eglantine-Official`, Djihads80), den eigenen laufenden Worktree.
+
+## Orchid: Harness-Tests auf dem Laptop, Builds zwischen PC und Laptop verteilen
+
+**Adresskorrektur von Leon (2026-11-09):** Laptop-LAN für alle Orchid-Tests ist
+`leon@192.168.150.206`. Die alte `.126` in früheren Aufträgen/Supportnotizen
+ist ungültig; stattdessen `.206` verwenden.
+
+Gilt für alle Orchid-Agents und Subagents (Leon 2026-11-08).
+
+- **Tests:** Alles, was Leon nicht selbst testen muss (Sound/Performance bewertet er weiter selbst,
+  siehe CLAUDE.md), aber über den Harness geht (headless Boots, Repro-Läufe, A/B-Vergleiche,
+  Screenshots, Logs), läuft auf dem **Laptop** (`ssh leon@100.111.165.26`), nicht am PC.
+  Kit: `~/orchid-test/relrun.sh <build> <tag> <game> <secs> [keys]`, Spiele in `~/Switch2`,
+  Ausgabe `~/orchid-test/out/rel/`, Log `data/eden/log/orchid_log.txt`.
+  GPU-Lock `~/orchid-issue-tests/locks/gpu.lock` (Xvfb mit `9>&-` starten). Kein OpenGL dort, nur Vulkan.
+  Nur wenn der Laptop nicht erreichbar ist oder der Test PC-Hardware braucht (RX 9070 XT/RADV-spezifisch,
+  Desktop), am PC testen — und dann per `agent-run`.
+- **Builds verteilen:** Ist der Laptop gerade frei von Tests (GPU-Lock frei, kein `orchid`/`eden-cli`
+  läuft), dort kompilieren, damit der PC entlastet ist; laufen dort Tests, am PC bauen
+  (`build-scope`/`agent-run` wie gehabt). Prüfen z.B. mit
+  `ssh leon@100.111.165.26 'flock -n ~/orchid-issue-tests/locks/gpu.lock true && ! pgrep -x orchid && ! pgrep -x eden-cli'`.
+  Pro Maschine nur ein voller Build gleichzeitig. Testbuilds für Leon (Shortcuts) müssen am Ende
+  am PC liegen: Laptop-Binary/AppImage per `scp` holen und `ldd` prüfen, oder dort am PC bauen.
