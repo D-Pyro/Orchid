@@ -40,6 +40,7 @@ add_executable(tests
     core/tennis_fps_patch.cpp
     core/wonder_fps_patch.cpp
     core/nx2_sysmix_pcm.cpp
+    core/hid_joycon2_style.cpp
     core/nso.cpp
     core/nrr.cpp
     core/ncz_decompressor.cpp
