@@ -7,6 +7,7 @@
 add_executable(tests
     common/bit_field.cpp
     common/cityhash.cpp
+    common/describe_exception.cpp
     common/container_hash.cpp
     common/event.cpp
     common/fibers.cpp
