@@ -408,6 +408,8 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code, bool geo
                 (carry_output != 7 && insn.Bits(73, 1)) ||
                 (opcode == 0x225 && (insn.words[1] & ~0xffU)) ||
                 (opcode == 0x625 && (!valid_cbuf() || insn.Bits(59, 5))) ||
+                // The addend pair must not cross the end of the 16-bit offset range.
+                (opcode == 0x625 && insn.Bits(38, 16) > 0xfff8) ||
                 (opcode != 0x625 && c != 255 && ((c & 1) || c >= 246)))
                 return fail(index, "native wide multiply mode");
             const u32 b = opcode == 0x625 ? c : opcode == 0x825 ? 248U : insn.Bits(32, 8);
@@ -415,8 +417,16 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code, bool geo
             multiply_high(a, b, insn.Bits(73, 1));
             multiply_low(a, b, 255, false, 247);
             if (opcode == 0x625) {
-                emit(0xef90000000000000ULL | predicate | 252 | (u64{255} << 8) |
-                     (u64{insn.Bits(38, 16)} << 20) | (u64{bank()} << 36) | (u64{5} << 48));
+                if (insn.Bits(38, 16) >= 0x8000) {
+                    // Maxwell LDC's offset is signed 16-bit: read the pair as two 32-bit
+                    // constants, whose offset field is unsigned.
+                    emit(0x4c98000000000000ULL | predicate | 252 | (u64{15} << 39) | cbuf());
+                    emit(0x4c98000000000000ULL | predicate | 253 | (u64{15} << 39) |
+                         (cbuf() + (u64{1} << 20)));
+                } else {
+                    emit(0xef90000000000000ULL | predicate | 252 | (u64{255} << 8) |
+                         (u64{insn.Bits(38, 16)} << 20) | (u64{bank()} << 36) | (u64{5} << 48));
+                }
             } else {
                 emit(0x5c98000000000000ULL | predicate | 252 | (u64{c} << 20) | (u64{15} << 39));
                 emit(0x5c98000000000000ULL | predicate | 253 |
@@ -959,6 +969,9 @@ case 0x311: { // F2I.FTZ.U64.TRUNC, per nvdisasm: Maxwell's F2I gives 32 bits, s
             // Maxwell LDC's offset is signed 16-bit, so a direct subword load past 0x7fff can't be encoded.
             if (target == ~0U || target == 255 || width > 5 ||
                 (opcode == 0xab9 && width < 4 && insn.Bits(38, 16) >= 0x8000) ||
+                // A direct 64-bit load past 0x7fff becomes two 32-bit reads; the pair must not
+                // cross the end of the 16-bit offset range.
+                (opcode == 0xab9 && width == 5 && insn.Bits(38, 16) > 0xfff8) ||
                 (width == 5 && ((uniform_dest & 1) || uniform_register(uniform_dest + 1) != target + 1)) ||
                 // Indexed loads align index + offset; the constant offset alone can be unaligned.
                 bank() >= 18 || (opcode == 0xab9 && insn.Bits(38, 16) % align) || insn.Bits(62, 2) ||
@@ -967,6 +980,10 @@ case 0x311: { // F2I.FTZ.U64.TRUNC, per nvdisasm: Maxwell's F2I gives 32 bits, s
                 return fail(index, "native uniform constant load mode");
             if (opcode == 0xab9 && width == 4) {
                 emit(0x4c98000000000000ULL | predicate | target | (u64{15} << 39) | cbuf());
+            } else if (opcode == 0xab9 && width == 5 && insn.Bits(38, 16) >= 0x8000) {
+                emit(0x4c98000000000000ULL | predicate | target | (u64{15} << 39) | cbuf());
+                emit(0x4c98000000000000ULL | predicate | (target + 1) | (u64{15} << 39) |
+                     (cbuf() + (u64{1} << 20)));
             } else {
                 emit(0xef90000000000000ULL | predicate | target |
                      (u64{index_target} << 8) | (u64{insn.Bits(38, 16)} << 20) |

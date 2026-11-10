@@ -109,6 +109,7 @@ add_executable(tests
     video_core/ampere_uniform_lea.cpp
     video_core/ampere_compute_forms.cpp
     video_core/ampere_integer_multiply.cpp
+    video_core/ampere_constant_load_offsets.cpp
     video_core/ampere_program_override.cpp
     video_core/x8d24_conversion.cpp
     video_core/ampere_bindless_tex.cpp
