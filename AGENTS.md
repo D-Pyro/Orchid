@@ -133,6 +133,27 @@ not use the default `low`; it is clearly weaker at computer use.
   did not cover subtle rendering artifacts or reading small status-bar text; check those
   yourself until a harder test says otherwise.
 
+### Mario Tennis Fever regression gate: play a Free Play match
+
+The gate before pushing emulator changes (after tests pass, fork-scan ports, perf or graphics
+changes) is a real match, not the main menu. Do not use the title/main-menu smoke
+(`mtf-title-smoke-v1`) as the gate any more; it only proves the game boots.
+
+- Start Mario Tennis Fever, go to Free Play, Singles, Quick Play (7 points), Stadium Court
+  (Grass), Mario against a CPU opponent, and play several points (serves, rallies, point
+  transitions). The saved route `mtf-mario-yoshi-stadium-match-v1` (`route_play` in the `orchid`
+  MCP, 47 steps) does this; re-record it if the game binding no longer matches. About five
+  minutes in total.
+- Pass only if all of this holds: both players, court, crowd, effects and scoreboard render;
+  text has no missing glyphs; the match runs through a point change without a hang, crash or
+  device loss; the log shows no new errors compared with the last good build; and the native
+  cadence is in the range of the last good run (`docs/performance/mtf-stadium-match-20261107.json`:
+  mean about 16.7 ms, p99 about 22 ms). The opponent is random, so this is a regression check,
+  not an A/B measurement; use `orchid-test-run` for numbers.
+- The Terra subagent runs it (see above) and returns screenshots, log excerpts and cadence
+  numbers. The main agent looks at the key screenshots and decides pass or fail.
+- Fail means: do not push; find the regression, fix it, run the gate again.
+
 ### Performance measurements
 
 - Use `orchid-test-run <label> <binary|AppImage> -g <game>` for every number you report. It freezes

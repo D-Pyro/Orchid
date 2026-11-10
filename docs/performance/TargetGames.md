@@ -22,7 +22,7 @@ System frame-work CSV inverse means are not display FPS. Keep diagnostic perf,
 RenderDoc and verbose traces separate from timed runs. Record sample failures.
 Profile the heaviest reproducible scene, rank measured costs, change one cause,
 and repeat. Promote only gains beyond run spread that repeat and pass graphics,
-regression tests and Tennis menu smoke checks. Do not turn missing measurements
+regression tests and the Tennis Free Play match gate. Do not turn missing measurements
 into zeros or use menu frame rates as gameplay results.
 
 If blocked, retain evidence, reason and concrete next action here and move to
@@ -230,8 +230,8 @@ Next: select a tighter/stable scene guard based on inspected reference images,
 validate replay on both arms, collect >=3 alternating independent runs per arm
 and a repeat batch. Validate movement/animation/cutscene duration against wall
 time, audio sync, sustained native 30 requests and both handheld/docked scenes.
-Then repeat without Hitch trace. Check default-profile regression and Tennis menu
-before any production setting/code change. Existing global default remains unchanged.
+Then repeat without Hitch trace. Check default-profile regression and the Tennis
+Free Play match gate before any production setting/code change. Existing global default remains unchanged.
 
 | Variant | Runs | Native cadence estimate | Gate | Verdict |
 | --- | ---: | ---: | --- | --- |
