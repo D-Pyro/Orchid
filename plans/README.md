@@ -18,7 +18,7 @@ committed.
 |------|-------|----------|--------|------------|--------|
 | [001](001-keep-real-vfs-children-inside-their-directory.md) | Host file creation and deletion through `RealVfsDirectory` stays inside the directory | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `6705eb8a08`) |
 | [002](002-reject-gaps-in-solid-ncz-sections.md) | A solid NCZ with a gap between sections fails cleanly | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `70f62fdbb8`) |
-| [003](003-extract-multi-program-nup-archives.md) | NUP archives of Switch 2 Edition dumps can be extracted again | P1 | S | — | TODO |
+| [003](003-extract-multi-program-nup-archives.md) | NUP archives of Switch 2 Edition dumps can be extracted again | P1 | S | — | DONE (reviewed 2026-11-10, on main as `nup: extract multi-program archives into program/<index>`) |
 | [004](004-lower-high-offset-64-bit-constant-loads.md) | 64-bit constant loads at offsets 0x8000 and above read the right bytes | P2 | S | — | TODO |
 | [005](005-zip-extraction-without-archive-symlinks.md) | Zip extraction never creates links from the archive | P2 | S | — | DONE (reviewed 2026-11-10, pushed to main as `b709dffe15`) |
 
@@ -48,6 +48,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   and the GUI build (exit 0; later runs exited 1 only because another session's
   `orchid-test-run` had frozen `agent-work.slice`). No unit test exists for the Qt zip code, so
   no mutation check; the manual Import-Mod-from-ZIP check with a link entry is still open. APPROVED.
+
+- 2026-11-10: plan 003 executed by a Sonnet executor (resumed once after a server restart).
+  Reviewer re-ran: `[nup]` 25/25 including the byte-for-byte repack, full suite 673 cases green,
+  scope = the three in-scope files. Mutation check 100 % (4 killed, 0 survived) over lines
+  1631-1634 and 1673-1674 of `nup_writer.cpp`. APPROVED.
 
 ## Dependency notes
 
