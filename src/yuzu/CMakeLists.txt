@@ -161,9 +161,12 @@ add_executable(yuzu
     game/search_field.h game/search_field.cpp
 
     modern/game_details.cpp modern/game_details.h
+    modern/hero_art.cpp modern/hero_art.h
+    modern/hero_art_dialog.cpp modern/hero_art_dialog.h
     modern/key_art.cpp modern/key_art.h
     modern/modern_library.cpp modern/modern_library.h
     modern/sidebar.cpp modern/sidebar.h
+    modern/steamgriddb.cpp modern/steamgriddb.h
     modern/theme.cpp modern/theme.h
 
     hotkeys.cpp

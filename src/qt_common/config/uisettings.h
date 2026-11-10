@@ -209,6 +209,9 @@ struct Values {
     Setting<bool> modern_interface{linkage, false, "modern_interface", Category::Ui};
     Setting<unsigned long long> modern_selected_game{linkage, 0, "modern_selected_game",
                                                      Category::UiGameList};
+    // Hero artwork from SteamGridDB, fetched with the key of the user's own account
+    Setting<std::string> steamgriddb_api_key{linkage, {}, "steamgriddb_api_key", Category::Ui};
+    Setting<bool> hero_art_auto_download{linkage, false, "hero_art_auto_download", Category::Ui};
 
     // Game List
     Setting<bool> show_add_ons{linkage, true, "show_add_ons", Category::UiGameList};

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <QPointer>
+#include <QSet>
 #include <QWidget>
 
 #include "yuzu/modern/game_details.h"
@@ -22,6 +23,7 @@ class QPushButton;
 class QScrollArea;
 class QStackedWidget;
 class QStandardItemModel;
+class QTimer;
 
 namespace Core {
 class System;
@@ -69,6 +71,8 @@ private:
     void ShowLibrary();
     void ShowDetails();
     void UpdateHero();
+    /// Automatic hero art download for the selected game, if the user turned it on.
+    void FetchHeroArt();
     void UpdateStatus();
     const ModernGame* Current() const;
 
@@ -89,6 +93,12 @@ private:
     QWidget* settings_page;
     QScrollArea* settings_scroll;
     QPointer<QDialog> settings_dialog;
+
+    /// Waits until the selection rests on a game before downloading artwork for it.
+    QTimer* art_timer;
+    bool art_download_running = false;
+    /// Title IDs already asked for in this session, found or not.
+    QSet<u64> art_tried;
 
     KeyArt* hero;
     QLineEdit* search;

@@ -54,6 +54,8 @@ public:
 
 signals:
     void Back();
+    /// The user chose or removed hero artwork.
+    void ArtChanged();
 
 private:
     void RebuildActions();

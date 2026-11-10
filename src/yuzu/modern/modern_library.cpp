@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -24,7 +25,9 @@
 #include <QStandardItemModel>
 #include <QStatusBar>
 #include <QStyledItemDelegate>
+#include <QTimer>
 #include <QVBoxLayout>
+#include <QtConcurrent>
 
 #include "frontend_common/content_manager.h"
 #include "frontend_common/play_time_manager.h"
@@ -33,8 +36,10 @@
 #include "qt_common/game_list/model.h"
 #include "yuzu/game/common.h"
 #include "yuzu/game/game_list.h"
+#include "yuzu/modern/hero_art.h"
 #include "yuzu/modern/key_art.h"
 #include "yuzu/modern/modern_library.h"
+#include "yuzu/modern/steamgriddb.h"
 #include "yuzu/modern/theme.h"
 #include "yuzu/multiplayer/state.h"
 #include "yuzu/util/clickable_label.h"
@@ -123,6 +128,11 @@ ModernLibrary::ModernLibrary(GameList* game_list_, QMainWindow* main_window_,
                              Core::System& system)
     : QWidget(game_list_), game_list{game_list_}, main_window{main_window_},
       play_time_manager{play_time_manager_} {
+    art_timer = new QTimer(this);
+    art_timer->setSingleShot(true);
+    art_timer->setInterval(800);
+    connect(art_timer, &QTimer::timeout, this, &ModernLibrary::FetchHeroArt);
+
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -174,6 +184,7 @@ ModernLibrary::ModernLibrary(GameList* game_list_, QMainWindow* main_window_,
                 Reload();
             });
     connect(details, &GameDetails::Back, this, &ModernLibrary::ShowLibrary);
+    connect(details, &GameDetails::ArtChanged, this, &ModernLibrary::UpdateHero);
     // Favorites changed (hero button, details page)
     connect(game_list, &GameList::SaveConfig, this, &ModernLibrary::RebuildShelf);
 
@@ -518,6 +529,7 @@ void ModernLibrary::UpdateHero() {
 
     if (game == nullptr) {
         hero->SetIcon({});
+        hero->SetWide({});
         hero_title->setText(games.empty() ? tr("Your library is empty") : tr("No games found"));
         hero_meta->setText(games.empty() ? tr("Add a folder with your games to get started.")
                                          : QString());
@@ -525,6 +537,11 @@ void ModernLibrary::UpdateHero() {
     }
 
     hero->SetIcon(game->icon);
+    const QPixmap wide = HeroArt::Load(game->program_id);
+    hero->SetWide(wide);
+    if (wide.isNull()) {
+        art_timer->start();
+    }
     hero_title->setText(game->title);
 
     QStringList meta;
@@ -538,6 +555,37 @@ void ModernLibrary::UpdateHero() {
     const bool is_favorite = UISettings::values.favorited_ids.contains(game->program_id);
     favorite->setChecked(is_favorite);
     favorite->setVisible(game->program_id != 0);
+}
+
+void ModernLibrary::FetchHeroArt() {
+    const ModernGame* game = Current();
+    const std::string key = UISettings::values.steamgriddb_api_key.GetValue();
+    if (game == nullptr || game->program_id == 0 || key.empty() || art_download_running ||
+        !UISettings::values.hero_art_auto_download.GetValue() ||
+        art_tried.contains(game->program_id) || HeroArt::Exists(game->program_id)) {
+        return;
+    }
+    // One request per game and session, so a game without artwork is not asked for again
+    // every time it is selected.
+    art_tried.insert(game->program_id);
+    art_download_running = true;
+
+    auto* watcher = new QFutureWatcher<QByteArray>(this);
+    connect(watcher, &QFutureWatcher<QByteArray>::finished, this,
+            [this, watcher, id = game->program_id] {
+                art_download_running = false;
+                if (HeroArt::Save(id, watcher->result()) && stack->currentWidget() == details &&
+                    details->Game().program_id == id) {
+                    details->SetGame(details->Game());
+                }
+                watcher->deleteLater();
+                // Shows the new artwork, or moves on to the game selected meanwhile.
+                UpdateHero();
+            });
+    watcher->setFuture(QtConcurrent::run([key, title = game->title] {
+        QString error;
+        return SteamGridDb::BestHero(key, title, error);
+    }));
 }
 
 void ModernLibrary::UpdateStatus() {

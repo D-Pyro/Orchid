@@ -25,6 +25,8 @@
 #include "yuzu/configuration/configure_per_game_addons.h"
 #include "yuzu/game/game_list.h"
 #include "yuzu/modern/game_details.h"
+#include "yuzu/modern/hero_art.h"
+#include "yuzu/modern/hero_art_dialog.h"
 #include "yuzu/modern/key_art.h"
 #include "yuzu/modern/sidebar.h"
 #include "yuzu/modern/theme.h"
@@ -71,9 +73,21 @@ GameDetails::GameDetails(GameList* game_list_, QMainWindow* main_window, Core::S
     auto* header_layout = new QVBoxLayout(header);
     header_layout->setContentsMargins(40, 24, 40, 28);
 
+    auto* top_row = new QHBoxLayout;
     auto* back = Button(tr("← Library"), "surface", header);
     connect(back, &QPushButton::clicked, this, &GameDetails::Back);
-    header_layout->addWidget(back, 0, Qt::AlignLeft);
+    auto* hero_art = Button(tr("Hero Art..."), "surface", header);
+    hero_art->setToolTip(tr("Choose wide artwork for this game from SteamGridDB"));
+    connect(hero_art, &QPushButton::clicked, this, [this] {
+        if (HeroArtDialog(game.program_id, game.title, this).exec() == QDialog::Accepted) {
+            header->SetWide(HeroArt::Load(game.program_id));
+            emit ArtChanged();
+        }
+    });
+    top_row->addWidget(back);
+    top_row->addStretch();
+    top_row->addWidget(hero_art);
+    header_layout->addLayout(top_row);
     header_layout->addStretch();
 
     auto* title_row = new QHBoxLayout;
@@ -206,6 +220,7 @@ void GameDetails::SetGame(const ModernGame& game_) {
     game = game_;
 
     header->SetIcon(game.icon);
+    header->SetWide(HeroArt::Load(game.program_id));
     icon->setPixmap(RoundedIcon(game.icon, 132, 18, devicePixelRatioF()));
     title->setText(game.title);
     play_time->setText(

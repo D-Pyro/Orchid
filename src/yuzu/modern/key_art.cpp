@@ -34,6 +34,12 @@ void KeyArt::SetIcon(const QPixmap& icon_) {
     update();
 }
 
+void KeyArt::SetWide(const QPixmap& wide_) {
+    wide = wide_;
+    cache = {};
+    update();
+}
+
 void KeyArt::SetFade(double from_left, double from_bottom) {
     fade_left = from_left;
     fade_bottom = from_bottom;
@@ -64,7 +70,13 @@ void KeyArt::paintEvent(QPaintEvent*) {
 
         QPainter p(&cache);
         p.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
-        if (!icon.isNull()) {
+        if (!wide.isNull()) {
+            // Fill the area; the left side is under the fade, so keep the right edge.
+            const QSize scaled = wide.size().scaled(size(), Qt::KeepAspectRatioByExpanding);
+            p.drawPixmap(QRect(QPoint(width() - scaled.width(), (height() - scaled.height()) / 2),
+                               scaled),
+                         wide);
+        } else if (!icon.isNull()) {
             // Shrinking to a few pixels and scaling back up is the blur.
             const QImage tiny = icon.toImage().scaled(12, 12, Qt::IgnoreAspectRatio,
                                                       Qt::SmoothTransformation);
