@@ -90,30 +90,21 @@ Compared with the Eglantine it started from:
 ## Performance and compatibility
 
 > [!NOTE]
-> Measured by hand in November 2026 on one PC: AMD Ryzen 7 5800X3D, AMD Radeon RX 9070 XT,
+> Measured by hand on Version 0.9.5 on one PC: AMD Ryzen 7 5800X3D, AMD Radeon RX 9070 XT,
 > 32 GB RAM, CachyOS (Linux 7.x, Mesa RADV from git), 1x resolution scaling. Other hardware
 > will differ.
 
 | Game | FPS | Notes |
 |---|---|---|
-| Hyrule Warriors: Age of Imprisonment | 60 | after shader compilation |
-| Donkey Kong Bananza | 30, 15-25 in heavy areas | 30 in lighter areas |
-| Mario Kart World | 30-40 | lots of off-track asset glitches |
+| Hyrule Warriors: Age of Imprisonment | 60 | drops to 20-40 in Combat |
+| Donkey Kong Bananza | 30-40, 15-25 in heavy areas | 30FPS Mod recommended (Built in) |
 | Mario Tennis Fever | 60 | runs flawlessly |
-| Yoshi and the Mysterious Book | | first level renders correctly and movement tested; full game not validated |
-| Super Mario Bros. Wonder | 60 target | custom FPS targets; Overworld cache churn reduced, some dips remain |
-| Star Fox | 30 | crashes very quickly |
-| Splatoon Raiders | 30 | in gameplay |
-| Pokémon Pokopia | 60 | in gameplay |
-| Pokémon Legends: Z-A | 30 | in gameplay, the Switch 1 frame cap |
-| Orbitals | | does not launch |
-| Nintendo Switch Sports Resort | 60 | broken lighting, broken controller selection |
-| Nintendo Switch 2 Welcome Tour | 30 | your own character is fully black |
-| Metroid Prime 4: Beyond | 60 | until it crashes early on |
+| Yoshi and the Mysterious Book | 60 | First Level tested |
+| Super Mario Bros. Wonder | 160 | custom FPS targets (only set what you can hit) |
+| Star Fox | 60 |  |
+| Pokémon Pokopia | 60 | |
+| Orbitals | 30 | Background Texture flickering |
 | Kirby Air Riders | | crashes while loading a race |
-| Fire Emblem: Fortune's Weave | 30 | in the first fight, large graphics glitches top left |
-| Fast Fusion | | stuck loading into a race, then the emulator crashes |
-| Drag x Drive | | no controller support, not playable |
 
 ## Download
 
