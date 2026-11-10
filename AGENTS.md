@@ -71,6 +71,23 @@ maintainer's own rules live in the maintainer's private `~/.claude/CLAUDE.md`, n
 
 This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
 
+## C++ code navigation and refactoring (LSP, clangd, ast-grep)
+
+The code is almost entirely C++. Use the `LSP` tool (clangd) instead of grep for symbol questions
+(definition, references, call hierarchy, `workspaceSymbol`). It only works with a compile database.
+
+- Once per worktree, in its root: `orchid-lsp-setup` (`~/.local/bin`). It runs
+  `tools/build-local.sh --configure-only` (no build), writes a local `.clangd` pointing at
+  `build-local/` and keeps it out of git via `.git/info/exclude`. Without it clangd finds no includes
+  and `findReferences` only sees one file. The background index (about 3000 files, 30 MB in
+  `build-local/.cache/clangd`) builds in a few minutes while clangd runs and stays on disk. After
+  editing `.clangd`, kill the clangd process; the plugin restarts it.
+- `findReferences` on widely used classes (for example `Scheduler`) returns hundreds of lines. Prefer
+  `workspaceSymbol`, `incomingCalls` or `outgoingCalls`, or read only the files you need.
+- The LSP tool cannot rename, apply fix-its or debug. Use `clang-tidy --fix -p build-local`,
+  `clang-format`, and `ast-grep run -l cpp -p '<pattern>' [--rewrite '<new>'] <dir>` (structural search
+  and multi-file rewrite, plain CLI) for those. After a rewrite, build and run the tests as usual.
+
 ## Mutation check is part of the final verification
 
 When production code or unit tests change, run the mutation check yourself as a mandatory part of
@@ -289,7 +306,7 @@ binaries under `~/Orchid/orchid-builds/` and private builds under `~/.cache/orch
 
 ### Disk budget (clean up regularly, not only at task end)
 
-Soft limit 60 GB, hard limit 100 GB for everything agents create: worktrees (all three
+Limit 100 GB for everything agents create: worktrees (all three
 locations above), their `build*/` directories, `~/Orchid/orchid-builds/`,
 `~/.cache/orchid-mutation/`, the compiler cache `~/.cache/orchid/`, and perf runs in
 `~/orchid-perf/` and `~/Orchid/orchid-perf/`. Not counted and never deleted for space: game data
@@ -304,14 +321,14 @@ du -sch ~/.t3/worktrees/Eglantine ~/src/Eglantine-* ~/Documents/Codex ~/Orchid/o
   ~/.cache/orchid-mutation ~/.cache/orchid ~/orchid-perf ~/Orchid/orchid-perf 2>/dev/null | tail -1
 ```
 
-Above the soft limit, clean until below it, in this order, each only under the safety rules above:
+Above the limit, clean until below it, in this order, each only under the safety rules above:
 1. private mutation builds in `~/.cache/orchid-mutation/` that no run is using (rebuilt on demand),
 2. test binaries in `~/Orchid/orchid-builds/` that no `orchid-test-*.desktop` points to,
 3. finished worktrees, oldest first,
 4. `build*/` directories of worktrees untouched for 7 days (ccache rebuilds them),
 5. perf runs older than 14 days, keeping `audio-baseline/` and the latest baseline run per game.
 
-Never clear the compiler cache for space. If still above the hard limit after all safe steps, tell
+Never clear the compiler cache for space. If still above the limit after all safe steps, tell
 the maintainer what blocks (for example worktrees with unpushed work); do not delete unsaved work.
 
 Measured 2026-11-10 (before this rule): about 120 GB in these locations (62 worktrees under
