@@ -232,3 +232,35 @@ binaries under `~/Orchid/orchid-builds/` and private builds under `~/.cache/orch
   with the `orchid-test-*.desktop` shortcuts). Do not delete game data (`.nup`, dumps).
 - Do not touch: the main checkout `~/src/Eglantine` and its `build/`, worktrees of other
   repositories (e.g. `~/Development/Eglantine-Official`, Djihads80), your own running worktree.
+
+### Disk budget (clean up regularly, not only at task end)
+
+Soft limit 60 GB, hard limit 100 GB for everything agents create: worktrees (all three
+locations above), their `build*/` directories, `~/Orchid/orchid-builds/`,
+`~/.cache/orchid-mutation/`, the compiler cache `~/.cache/orchid/`, and perf runs in
+`~/orchid-perf/` and `~/Orchid/orchid-perf/`. Not counted and never deleted for space: game data
+(`.nup`, dumps), the main checkout, and issue attachments in `~/Orchid/orchid-issues/`. A source
+checkout is about 0.5 GB, a build directory several GB, so at most a handful of worktrees with
+builds fit; keep one worktree per active task and remove it when the task ends.
+
+Check at the start and at the end of every Orchid task, and before creating a worktree:
+
+```sh
+du -sch ~/.t3/worktrees/Eglantine ~/src/Eglantine-* ~/Documents/Codex ~/Orchid/orchid-builds \
+  ~/.cache/orchid-mutation ~/.cache/orchid ~/orchid-perf ~/Orchid/orchid-perf 2>/dev/null | tail -1
+```
+
+Above the soft limit, clean until below it, in this order, each only under the safety rules above:
+1. private mutation builds in `~/.cache/orchid-mutation/` that no run is using (rebuilt on demand),
+2. test binaries in `~/Orchid/orchid-builds/` that no `orchid-test-*.desktop` points to,
+3. finished worktrees, oldest first,
+4. `build*/` directories of worktrees untouched for 7 days (ccache rebuilds them),
+5. perf runs older than 14 days, keeping `audio-baseline/` and the latest baseline run per game.
+
+Never clear the compiler cache for space. If still above the hard limit after all safe steps, tell
+the maintainer what blocks (for example worktrees with unpushed work); do not delete unsaved work.
+
+Measured 2026-11-10 (before this rule): about 120 GB in these locations (62 worktrees under
+`~/.t3/worktrees/Eglantine` 39 GB, `~/Documents/Codex` 38 GB, `~/Orchid/orchid-builds` 20 GB,
+`~/.cache/orchid-mutation` 12 GB, `~/src/Eglantine-*` about 7 GB, compiler cache 2 GB). The first
+cleanup pass therefore removes finished worktrees and stale builds.
