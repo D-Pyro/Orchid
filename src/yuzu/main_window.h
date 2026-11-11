@@ -173,6 +173,10 @@ class MainWindow : public QMainWindow {
 public:
     void filterBarSetChecked(bool state);
     void UpdateUITheme();
+    /// Applies the "Modern interface" setting to the library view and the menu bar.
+    void ApplyInterfaceStyle();
+    /// The modern interface has the menus in its sidebar; the bar returns while a game runs.
+    void UpdateMenuBarVisibility();
     explicit MainWindow(bool has_broken_vulkan);
     ~MainWindow() override;
 
@@ -549,6 +553,8 @@ private:
 
     // Whether emulation is currently running in yuzu.
     bool emulation_running = false;
+    /// The modern theme replaced the application palette; undone when switching back.
+    bool modern_palette_set = false;
     // The crash log is this run's once a game has booted, else the previous run's.
     bool game_booted = false;
     bool boot_in_progress = false;

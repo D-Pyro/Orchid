@@ -151,6 +151,7 @@ ConfigureUi::~ConfigureUi() = default;
 void ConfigureUi::ApplyConfiguration() {
     UISettings::values.theme =
         ui->theme_combobox->itemData(ui->theme_combobox->currentIndex()).toString().toStdString();
+    UISettings::values.modern_interface = ui->modern_interface->isChecked();
     UISettings::values.show_add_ons = ui->show_add_ons->isChecked();
     UISettings::values.show_size = ui->show_size->isChecked();
     UISettings::values.show_types = ui->show_types->isChecked();
@@ -179,6 +180,7 @@ void ConfigureUi::SetConfiguration() {
         ui->theme_combobox->findData(QString::fromStdString(UISettings::values.theme)));
     ui->language_combobox->setCurrentIndex(ui->language_combobox->findData(
         QString::fromStdString(UISettings::values.language.GetValue())));
+    ui->modern_interface->setChecked(UISettings::values.modern_interface.GetValue());
     ui->show_add_ons->setChecked(UISettings::values.show_add_ons.GetValue());
     ui->show_size->setChecked(UISettings::values.show_size.GetValue());
     ui->show_types->setChecked(UISettings::values.show_types.GetValue());

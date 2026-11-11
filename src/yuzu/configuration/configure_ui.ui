@@ -18,6 +18,25 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QGroupBox" name="interface_groupBox">
+     <property name="title">
+      <string>Interface</string>
+     </property>
+     <layout class="QVBoxLayout" name="interface_layout">
+      <item>
+       <widget class="QCheckBox" name="modern_interface">
+        <property name="toolTip">
+         <string>Library with game artwork, sidebar menus and game details. Turn off to return to the classic menu bar and game list.</string>
+        </property>
+        <property name="text">
+         <string>Modern interface</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="general_groupBox">
      <property name="title">
       <string>General</string>

@@ -40,6 +40,7 @@
 #include "yuzu/game/game_tree.h"
 #include "yuzu/game/search_field.h"
 #include "yuzu/main_window.h"
+#include "yuzu/modern/modern_library.h"
 #include "yuzu/util/controller_navigation.h"
 
 GameList::GameList(FileSys::VirtualFilesystem vfs_, FileSys::ManualContentProvider* provider_,
@@ -83,7 +84,8 @@ GameList::GameList(FileSys::VirtualFilesystem vfs_, FileSys::ManualContentProvid
                     return;
                 }
                 QKeyEvent* event = new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier);
-                QCoreApplication::postEvent(m_currentView, event);
+                QCoreApplication::postEvent(
+                    m_modern ? modern_view->Shelf() : static_cast<QWidget*>(m_currentView), event);
             });
 
     connect(item_model, &GameListModel::PopulatingCompleted, this,
@@ -129,13 +131,40 @@ void GameList::ClearFilter() {
 }
 
 void GameList::SetFilterFocus() {
-    if (item_model->rowCount() > 0) {
+    if (m_modern) {
+        modern_view->FocusSearch();
+    } else if (item_model->rowCount() > 0) {
         search_field->setFocus();
     }
 }
 
 void GameList::SetFilterVisible(bool visibility) {
-    search_field->setVisible(visibility);
+    // The modern interface has its own search field.
+    search_field->setVisible(visibility && !m_modern);
+}
+
+void GameList::SetModernInterface(bool modern) {
+    if (modern == m_modern) {
+        return;
+    }
+    m_modern = modern;
+    if (modern && modern_view == nullptr) {
+        modern_view = new ModernLibrary(this, main_window, play_time_manager, system);
+        layout->addWidget(modern_view);
+    }
+    if (modern_view != nullptr) {
+        modern_view->setVisible(modern);
+    }
+    search_field->setVisible(false);
+    ResetViewMode();
+}
+
+int GameList::ExecSettingsPage(QDialog* dialog) {
+    return modern_view->ExecSettings(dialog);
+}
+
+bool GameList::IsSettingsPageOpen() const {
+    return modern_view != nullptr && modern_view->SettingsOpen();
 }
 
 bool GameList::IsEmpty() const {
@@ -212,6 +241,9 @@ void GameList::ResetViewMode() {
         UNREACHABLE();
     }
 
+    // The modern library reads folders and favorites from the tree-shaped model.
+    newTreeMode |= m_modern;
+
     tree_view->setVisible(false);
     grid_view->setVisible(false);
     carousel_view->setVisible(false);
@@ -220,7 +252,7 @@ void GameList::ResetViewMode() {
     grid_view->setEnabled(false);
     carousel_view->setEnabled(false);
 
-    m_currentView->setVisible(true);
+    m_currentView->setVisible(!m_modern);
     // MainWindow switches the view right after starting the first populate; keep it disabled
     // until that finishes, as OnPopulate does for every other populate.
     m_currentView->setEnabled(!m_populating);
@@ -347,6 +379,10 @@ void GameList::OnPopulatingCompleted(const QStringList& watch_list) {
     item_model->sort(tree_view->header()->sortIndicatorSection(),
                      tree_view->header()->sortIndicatorOrder());
 
+    if (m_modern) {
+        modern_view->Reload();
+    }
+
     emit PopulatingCompleted();
 }
 
@@ -375,34 +411,35 @@ void GameList::ValidateEntry(const QModelIndex& item) {
     const auto selected = item.sibling(item.row(), 0);
 
     switch (selected.data(GameListItem::TypeRole).value<GameListItemType>()) {
-    case GameListItemType::Game: {
-        const QString file_path = selected.data(GameListItemPath::FullPathRole).toString();
-        if (file_path.isEmpty())
-            return;
-        const QFileInfo file_info(file_path);
-        if (!file_info.exists())
-            return;
-
-        if (file_info.isDir()) {
-            if (const auto main = Loader::ResolveLooseProgramPath(
-                    std::filesystem::path{Common::FS::ToU8String(file_path.toStdString())})) {
-                emit GameChosen(QString::fromStdString(Common::FS::PathToUTF8String(*main)));
-            }
-            return;
-        }
-
-        const auto title_id = selected.data(GameListItemPath::ProgramIdRole).toULongLong();
-
-        search_field->clear();
-        emit GameChosen(file_path, title_id);
+    case GameListItemType::Game:
+        LaunchGame(selected.data(GameListItemPath::FullPathRole).toString(),
+                   selected.data(GameListItemPath::ProgramIdRole).toULongLong());
         break;
-    }
     case GameListItemType::AddDir:
         emit AddDirectory();
         break;
     default:
         break;
     }
+}
+
+void GameList::LaunchGame(const QString& file_path, u64 title_id) {
+    if (file_path.isEmpty())
+        return;
+    const QFileInfo file_info(file_path);
+    if (!file_info.exists())
+        return;
+
+    if (file_info.isDir()) {
+        if (const auto main = Loader::ResolveLooseProgramPath(
+                std::filesystem::path{Common::FS::ToU8String(file_path.toStdString())})) {
+            emit GameChosen(QString::fromStdString(Common::FS::PathToUTF8String(*main)));
+        }
+        return;
+    }
+
+    search_field->clear();
+    emit GameChosen(file_path, title_id);
 }
 
 void GameList::ToggleFavorite(u64 program_id) {

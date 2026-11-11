@@ -49,6 +49,7 @@
 #include "set_play_time_dialog.h"
 #include "util/util.h"
 #include "yuzu/game/game_list.h"
+#include "yuzu/modern/theme.h"
 #include "yuzu/nup_dialogs.h"
 
 #include "applets/qt_amiibo_settings.h"
@@ -477,6 +478,7 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     if (Settings::values.use_dev_keys.GetValue()) {
         Core::Crypto::KeyManager::Instance().ReloadKeys();
     }
+    ApplyInterfaceStyle();
     game_list->PopulateAsync(UISettings::values.game_dirs);
 
     // Set up game list mode checkboxes.
@@ -2275,6 +2277,7 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     loading_screen->show();
 
     emulation_running = true;
+    UpdateMenuBarVisibility();
     if (ui->action_Fullscreen->isChecked()) {
         ShowFullscreen();
     } else {
@@ -2403,6 +2406,7 @@ void MainWindow::OnEmulationStopped() {
     }
 
     emulation_running = false;
+    UpdateMenuBarVisibility();
 
     discord_rpc->Update();
     Common::FeralGamemode::Stop();
@@ -2416,7 +2420,7 @@ void MainWindow::OnEmulationStopped() {
     render_window->hide();
     loading_screen->hide();
     loading_screen->Clear();
-    if (game_list->IsEmpty()) {
+    if (game_list->IsEmpty() && !game_list->IsModernInterface()) {
         game_list_placeholder->show();
     } else {
         game_list->show();
@@ -2963,6 +2967,8 @@ void MainWindow::OnGameListAddDirectory() {
 void MainWindow::OnGameListShowList(bool show) {
     if (emulation_running && ui->action_Single_Window_Mode->isChecked())
         return;
+    // The modern library has its own empty state, and the only way to the menus.
+    show |= game_list->IsModernInterface();
     game_list->setVisible(show);
     game_list_placeholder->setVisible(!show);
 };
@@ -3612,7 +3618,7 @@ void MainWindow::HideFullscreen() {
         }
 
         statusBar()->setVisible(ui->action_Show_Status_Bar->isChecked());
-        ui->menubar->show();
+        UpdateMenuBarVisibility();
     } else {
         if (UsingExclusiveFullscreen()) {
             render_window->showNormal();
@@ -3763,8 +3769,29 @@ void MainWindow::ToggleShowGameName() {
     game_list->RefreshGameDirectory();
 }
 
+void MainWindow::ApplyInterfaceStyle() {
+    const bool modern = UISettings::values.modern_interface.GetValue();
+    const bool changed = modern != game_list->IsModernInterface();
+    game_list->SetModernInterface(modern);
+    game_list->SetFilterVisible(ui->action_Show_Filter_Bar->isChecked());
+    UpdateMenuBarVisibility();
+    if (changed && !emulation_running) {
+        // The classic interface shows a placeholder instead of an empty list.
+        OnGameListShowList(!game_list->IsEmpty());
+    }
+}
+
+void MainWindow::UpdateMenuBarVisibility() {
+    ui->menubar->setVisible(!UISettings::values.modern_interface.GetValue() || emulation_running);
+}
+
 void MainWindow::OnConfigure() {
+    if (game_list->IsSettingsPageOpen()) {
+        return;
+    }
+
     const auto old_theme = UISettings::values.theme;
+    const bool old_modern_interface = UISettings::values.modern_interface.GetValue();
     const bool old_discord_presence = UISettings::values.enable_discord_presence.GetValue();
     const auto old_language_index = Settings::values.language_index.GetValue();
     const bool old_gamemode = UISettings::values.enable_gamemode.GetValue();
@@ -3781,7 +3808,12 @@ void MainWindow::OnConfigure() {
     connect(&configure_dialog, &ConfigureDialog::ExternalContentDirsChanged, this,
             &MainWindow::OnGameListRefresh);
 
-    const auto result = configure_dialog.exec();
+    // The modern interface shows the settings as a page of the main window. While a game runs
+    // that page is covered by the game, so the dialog is used then.
+    const bool as_page = game_list->IsModernInterface() && game_list->isVisible() &&
+                         game_list->isEnabled();
+    const auto result =
+        as_page ? game_list->ExecSettingsPage(&configure_dialog) : configure_dialog.exec();
     if (result != QDialog::Accepted && !UISettings::values.configuration_applied &&
         !UISettings::values.reset_to_defaults) {
         // Runs if the user hit Cancel or closed the window, and did not ever press the Apply button
@@ -3826,8 +3858,15 @@ void MainWindow::OnConfigure() {
     }
     InitializeHotkeys();
 
-    if (UISettings::values.theme != old_theme) {
+    const bool interface_changed =
+        UISettings::values.modern_interface.GetValue() != old_modern_interface;
+    if (UISettings::values.theme != old_theme || interface_changed) {
         UpdateUITheme();
+    }
+    if (interface_changed) {
+        ApplyInterfaceStyle();
+        // The two interfaces use different icon sizes.
+        UISettings::values.is_game_list_reload_pending = true;
     }
     if (UISettings::values.enable_discord_presence.GetValue() != old_discord_presence) {
         SetDiscordEnabled(UISettings::values.enable_discord_presence.GetValue());
@@ -5324,6 +5363,12 @@ static void AdjustLinkColor() {
 }
 
 void MainWindow::UpdateUITheme() {
+    const bool modern = UISettings::values.modern_interface.GetValue();
+    if (!modern && modern_palette_set) {
+        qApp->setPalette(QPalette());
+        modern_palette_set = false;
+    }
+
     const QString default_theme = QString::fromUtf8(UISettings::themes[size_t(UISettings::default_theme)].second);
     QString current_theme = QString::fromStdString(UISettings::values.theme);
 
@@ -5357,12 +5402,24 @@ void MainWindow::UpdateUITheme() {
         }
     }
 
+    if (modern) {
+        // The modern sheet builds on the default one, which styles the controller and keyboard
+        // applets.
+        current_theme = ModernTheme::IsDark() ? QStringLiteral("default_dark") : default_theme;
+    }
+
     QString theme_uri{QStringLiteral(":%1/style.qss").arg(current_theme)};
     QFile f(theme_uri);
     if (f.open(QFile::ReadOnly | QFile::Text)) {
         QTextStream ts(&f);
-        qApp->setStyleSheet(ts.readAll());
-        setStyleSheet(ts.readAll());
+        QString sheet = ts.readAll();
+        if (modern) {
+            qApp->setPalette(ModernTheme::Palette());
+            modern_palette_set = true;
+            sheet += ModernTheme::StyleSheet();
+        }
+        qApp->setStyleSheet(sheet);
+        setStyleSheet({});
     } else {
         LOG_ERROR(Frontend, "Unable to set style \"{}\", stylesheet file not found",
                   UISettings::values.theme);
@@ -5441,11 +5498,12 @@ void MainWindow::changeEvent(QEvent* event) {
         // Keeping eye on QPalette::Window to avoid looping. QPalette::Text might be useful too
         static QColor last_window_color;
         const QColor window_color = test_palette.color(QPalette::Active, QPalette::Window);
-        if (last_window_color != window_color && (current_theme == QStringLiteral("default") ||
-                                                  current_theme == QStringLiteral("colorful"))) {
+        // Remember the colour first: applying a theme sends further palette changes.
+        const bool changed = std::exchange(last_window_color, window_color) != window_color;
+        if (changed && (current_theme == QStringLiteral("default") ||
+                        current_theme == QStringLiteral("colorful"))) {
             UpdateUITheme();
         }
-        last_window_color = window_color;
     }
 #endif // __unix__
     QWidget::changeEvent(event);
