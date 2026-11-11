@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <limits>
+#include <span>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -45,4 +47,23 @@ TEST_CASE("Budget-aware texture cache retains fitting Overworld working sets", "
     const auto tiny = ClampTextureCacheThresholds({256_MiB, 512_MiB, 128_MiB}, true, 5_GiB);
     CHECK(tiny.expected == 0);
     CHECK(tiny.minimum == 0);
+}
+
+TEST_CASE("Feedback shadow copies stay bounded", "[memory_budget]") {
+    using VideoCommon::FeedbackShadowToEvict;
+    constexpr auto none = std::dynamic_extent;
+    const std::vector<int> shadows{10, 11, 12};
+    const std::vector<int> nothing_bound;
+    // Below the cap a new shape gets its own copy.
+    REQUIRE(FeedbackShadowToEvict<int>(shadows, nothing_bound, 4) == none);
+    // At the cap the least recently used copy (front) goes.
+    REQUIRE(FeedbackShadowToEvict<int>(shadows, nothing_bound, 3) == 0);
+    REQUIRE(FeedbackShadowToEvict<int>(shadows, nothing_bound, 2) == 0);
+    // Copies bound by the current draw are skipped; all bound keeps them all.
+    const std::vector<int> front_bound{10};
+    REQUIRE(FeedbackShadowToEvict<int>(shadows, front_bound, 3) == 1);
+    const std::vector<int> two_bound{11, 10};
+    REQUIRE(FeedbackShadowToEvict<int>(shadows, two_bound, 3) == 2);
+    REQUIRE(FeedbackShadowToEvict<int>(shadows, shadows, 3) == none);
+    REQUIRE(VideoCommon::MaxFeedbackShadows == 8);
 }

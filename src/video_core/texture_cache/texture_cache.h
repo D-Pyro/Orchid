@@ -616,7 +616,35 @@ void TextureCache<P>::ReplaceColorFeedbackViews(std::span<ImageViewInOut> views)
                    a.resources.layers == b.resources.layers;
         };
         auto it = std::ranges::find_if(feedback_shadows, same_shape);
-        if (it == feedback_shadows.end()) {
+        if (it != feedback_shadows.end()) {
+            // Keep the list least recently used first for FeedbackShadowToEvict.
+            std::rotate(it, std::next(it), feedback_shadows.end());
+            it = std::prev(feedback_shadows.end());
+        } else {
+            if (const std::size_t old = FeedbackShadowToEvict<ImageId>(feedback_shadows, used_shadows);
+                old != std::dynamic_extent) {
+                // Shadows are never registered, so DeleteImage does not apply: free the views and
+                // the image the same deferred way, after the GPU is done with earlier draws.
+                const ImageId old_id = feedback_shadows[old];
+                feedback_shadows.erase(feedback_shadows.begin() + old);
+                Image& old_image = slot_images[old_id];
+                const std::vector<ImageViewId> old_views = old_image.image_view_ids;
+                RemoveImageViewReferences(old_views);
+                for (const ImageViewId old_view : old_views) {
+                    sentenced_image_view.Push(std::move(slot_image_views[old_view]));
+                    slot_image_views.erase(old_view);
+                }
+                const u64 old_bytes = ImageMemoryBytes(old_image);
+                if constexpr (requires { runtime.CurrentTick(); }) {
+                    gpu_sentenced_images.push_back(
+                        {runtime.CurrentTick(), old_bytes, std::move(old_image)});
+                    gpu_sentenced_bytes += old_bytes;
+                } else {
+                    sentenced_images.Push(std::move(old_image));
+                    sentenced_image_bytes[sentenced_image_index] += old_bytes;
+                }
+                slot_images.erase(old_id);
+            }
             const ImageInfo info = slot_images[image_id].info;
             const DAddr cpu_addr = slot_images[image_id].cpu_addr;
             feedback_shadows.push_back(slot_images.insert(runtime, info, gpu_addr, cpu_addr));

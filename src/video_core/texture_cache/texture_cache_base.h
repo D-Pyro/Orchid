@@ -655,7 +655,7 @@ private:
     std::deque<PendingUnswizzle> unswizzle_queue;
     u8 current_unswizzle_frame;
 
-    /// Copies of colour targets their own draws sample, one per image shape (never deleted).
+    /// Copies of colour targets their own draws sample, one per image shape, least recently used first.
     std::vector<ImageId> feedback_shadows;
 
     // Join caching
