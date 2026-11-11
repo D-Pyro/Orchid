@@ -611,15 +611,16 @@ public:
                     continue;
                 }
                 for (const auto& content : fs::directory_iterator(title.path(), ec)) {
-                    if (content.is_directory(ec) && HasContent(content.path())) {
+                    const auto package = AddonPackageDir(content.path());
+                    if (!package.empty()) {
                         addons.emplace_back(title_name + "/" + ToUtf8(content.path().filename()),
-                                            content.path());
+                                            package);
                     }
                 }
             }
             std::ranges::sort(addons);
             for (const auto& [name, path] : addons) {
-                const auto version = ParseDecimal(ToUtf8(path.filename())).value_or(0);
+                const auto version = ParseDecimal(name.substr(17)).value_or(0);
                 if (version > std::numeric_limits<u32>::max()) {
                     throw PackError(PackResult::InvalidSource, "add-on content version exceeds u32");
                 }
@@ -644,6 +645,36 @@ private:
     static bool HasContent(const fs::path& dir) {
         return DirHasFiles(FindDirectory(dir, "exefs")) ||
                DirHasFiles(FindDirectory(dir, "romfs"));
+    }
+
+    // The folder holding an add-on version's content, found the way the loose loader's
+    // FindLooseAOC finds it: the version folder, its base/, or program/0 inside either. Dumps
+    // hold the full patched RomFS, so the newest updates/<patch>/program/0 replaces them.
+    static fs::path AddonPackageDir(const fs::path& version_dir) {
+        const auto program_zero = [](const fs::path& package) {
+            const auto programs = FindDirectory(package, "program");
+            return programs.empty() ? fs::path{} : programs / "0";
+        };
+        fs::path found;
+        const auto base = FindDirectory(version_dir, "base");
+        for (const auto& dir : {version_dir, program_zero(version_dir), base, program_zero(base)}) {
+            if (HasContent(dir)) {
+                found = dir;
+                break;
+            }
+        }
+        u64 best_patch = 0;
+        std::error_code ec;
+        for (const auto& patch :
+             fs::directory_iterator(FindDirectory(version_dir, "updates"), ec)) {
+            const auto number = ParseDecimal(ToUtf8(patch.path().filename()));
+            const auto dir = program_zero(patch.path());
+            if (number && *number >= best_patch && HasContent(dir)) {
+                found = dir;
+                best_patch = *number;
+            }
+        }
+        return found;
     }
 
     static bool DirHasFiles(const fs::path& dir) {

@@ -650,6 +650,43 @@ TEST_CASE("NUP exposes only the newest DLC RomFS for the running application", "
     REQUIRE(Read(addons[1].second->GetFile("second.bin")) == "second addon");
 }
 
+TEST_CASE("NUP packs add-ons from nested dump layouts and their newest patch", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    fs::remove_all(root / "dlc");
+    Put(root / "dlc/0400ABCD00011001/0/base/program/0/romfs/a.bin", "base program");
+    Put(root / "dlc/0400ABCD00011002/0/Base/RomFS/b.bin", "base");
+    Put(root / "dlc/0400ABCD00011003/0/program/0/romfs/c.bin", "program");
+    Put(root / "dlc/0400ABCD00011003/0/updates/1/program/0/romfs/c.bin", "low patch");
+    // The newest patch replaces the add-on's base; a patch without content does not count.
+    Put(root / "dlc/0400ABCD00011004/65536/base/program/0/romfs/d.bin", "unpatched");
+    Put(root / "dlc/0400ABCD00011004/65536/updates/65536/program/0/romfs/d.bin", "patch 1");
+    Put(root / "dlc/0400ABCD00011004/65536/updates/131072/program/0/romfs/d.bin", "patch 2");
+    Put(root / "dlc/0400ABCD00011004/65536/updates/196608/program/0/meta/x.cnmt", "no content");
+    Put(root / "dlc/0400ABCD00011004/65536/updates/notes/program/0/romfs/d.bin", "not a patch");
+    Put(root / "dlc/0400ABCD00011005/0/meta/x.cnmt", "no content");
+    Put(root / "dlc/0400ABCD00011006/unversioned/romfs/e.bin", "unversioned");
+    Put(root / "dlc/0400ABCD00011007", "a file, not a title folder");
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    FileSys::RealVfsFilesystem real;
+    NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+    const auto indices = nup.FindAddonPackages(TitleId);
+    REQUIRE(indices.size() == 5);
+    const auto addon = [&](std::size_t i) { return PackedTree(nup.GetRomFSDir(indices[i])); };
+    using Tree = std::map<std::string, std::string>;
+    REQUIRE(addon(0) == Tree{{"a.bin", "base program"}});
+    REQUIRE(addon(1) == Tree{{"b.bin", "base"}});
+    REQUIRE(addon(2) == Tree{{"c.bin", "low patch"}});
+    REQUIRE(addon(3) == Tree{{"d.bin", "patch 2"}});
+    REQUIRE(nup.GetPackages()[indices[3]].title_id == TitleId + 0x1004);
+    REQUIRE(nup.GetPackages()[indices[3]].version == 65536);
+    REQUIRE(addon(4) == Tree{{"e.bin", "unversioned"}});
+    REQUIRE(nup.GetPackages()[indices[4]].version == 0);
+}
+
 TEST_CASE("NUP preserves edition control metadata and legacy DLC ownership", "[nup]") {
     TempDir t;
     const auto root = t.path / "Game";
