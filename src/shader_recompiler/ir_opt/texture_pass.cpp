@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <map>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
@@ -1259,6 +1260,25 @@ void TexturePass(Environment& env, IR::Program& program, const HostTranslateInfo
                 texture_inst.inst->Flags<IR::TextureInstInfo>().type.Value());
         }
     }
+    // The same goes for a handle read from a constant buffer: the type a sampling instruction
+    // encodes is certain, the bound descriptor is not. Pokemon Legends Z-A builds its tone-map
+    // shader while the descriptor of the scene colour is still empty (1D); the size query then
+    // returned height 0 and every row sampled the top line of the scene. A 1D instruction is left
+    // out: it may address a texture buffer, which only the descriptor tells.
+    using CbufHandle = std::tuple<u32, u32, bool, u32, u32, u32>;
+    const auto cbuf_handle{[](const ConstBufferAddr& cbuf) {
+        return CbufHandle{cbuf.index,           cbuf.offset,           cbuf.has_secondary,
+                          cbuf.secondary_index, cbuf.secondary_offset, cbuf.handle_program};
+    }};
+    std::map<CbufHandle, TextureType> cbuf_handle_types;
+    for (const TextureInst& texture_inst : to_replace) {
+        const IR::Opcode opcode{IndexedInstruction(*texture_inst.inst)};
+        const TextureType type{texture_inst.inst->Flags<IR::TextureInstInfo>().type.Value()};
+        if (!IsStorageImageOpcode(opcode) && type != TextureType::Color1D &&
+            type != TextureType::Buffer) {
+            cbuf_handle_types.try_emplace(cbuf_handle(texture_inst.cbuf), type);
+        }
+    }
     for (TextureInst& texture_inst : to_replace) {
         // TODO: Handle arrays
         IR::Inst* const inst{texture_inst.inst};
@@ -1274,6 +1294,9 @@ void TexturePass(Environment& env, IR::Program& program, const HostTranslateInfo
             if (const auto it{handle_program_types.find(cbuf.handle_program)};
                 it != handle_program_types.end()) {
                 flags.type.Assign(it->second);
+            } else if (const auto cbuf_it{cbuf_handle_types.find(cbuf_handle(cbuf))};
+                       cbuf_it != cbuf_handle_types.end()) {
+                flags.type.Assign(cbuf_it->second);
             } else {
                 flags.type.Assign(ReadTextureTypeCached(env, cbuf));
             }

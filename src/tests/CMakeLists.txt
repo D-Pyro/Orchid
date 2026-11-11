@@ -97,6 +97,7 @@ add_executable(tests
     video_core/texture_unswizzle.cpp
     video_core/texture_row_upload.cpp
     video_core/texture_depth_float.cpp
+    video_core/texture_query_type.cpp
     video_core/texture_descriptor_bounds.cpp
     video_core/shader_snapshot.cpp
     video_core/texture_r2ur_handle.cpp
