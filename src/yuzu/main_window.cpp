@@ -2047,18 +2047,20 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
                 switch (static_cast<Quality>(quality->currentData().toInt())) {
                 case Quality::Low:
                     summary->setText(
-                        tr("0.75× resolution · FXAA · BC3 textures · 2× anisotropic filtering\n"
-                           "Lower GPU load with a softer image."));
+                        tr("0.75× resolution · FXAA · BC3 textures · 2× anisotropic "
+                           "filtering\nLower GPU load with a softer image. For weak graphics cards."));
                     break;
                 case Quality::High:
                     summary->setText(tr(
-                        "2× resolution · SMAA · Uncompressed textures · 16× anisotropic filtering\n"
-                        "Sharper image with higher GPU and graphics memory use."));
+                        "2× resolution · SMAA · Uncompressed textures · 16× anisotropic "
+                        "filtering\nSharper image with higher GPU and graphics memory use. For "
+                        "high-end graphics cards."));
                     break;
                 default:
                     summary->setText(
-                        tr("1× resolution · FXAA · BC3 textures · 4× anisotropic filtering\n"
-                           "A balance of image quality and performance."));
+                        tr("1× resolution · SMAA · BC3 textures · 16× anisotropic "
+                           "filtering\nA balance of image quality and performance. For mid-range "
+                           "graphics cards."));
                     break;
                 }
             };

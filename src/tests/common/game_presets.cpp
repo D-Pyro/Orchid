@@ -35,7 +35,6 @@ void CheckPreset(const Settings::Values& settings) {
     CHECK(settings.gpu_fence_behavior.GetValue() == Settings::GpuFenceBehavior::Balanced);
     CHECK(settings.async_presentation.GetValue());
     CHECK(settings.scaling_filter.GetValue() == Settings::ScalingFilter::ScaleForce);
-    CHECK(settings.anti_aliasing.GetValue() == Settings::AntiAliasing::Fxaa);
 }
 
 void CheckPreferences(const Settings::Values& settings, bool global = false) {
@@ -64,6 +63,7 @@ TEST_CASE("Accepted MTF settings replace visible global preferences", "[game_pre
     SetConflictingPreferences(*settings, false);
     Settings::SetMarioTennisFeverRecommendedSettings(*settings, true);
     CheckPreset(*settings);
+    CHECK(settings->anti_aliasing.GetValue() == Settings::AntiAliasing::Fxaa);
     CHECK(settings->renderer_backend.UsingGlobal());
     CHECK(settings->gpu_accuracy.UsingGlobal());
     CHECK(settings->renderer_backend.GetValue(true) == Settings::RendererBackend::Vulkan);
@@ -177,16 +177,16 @@ TEST_CASE("Every visual quality retains each title's compatibility settings and 
                   (quality == Quality::Low    ? Settings::ResolutionSetup::Res3_4X
                    : quality == Quality::High ? Settings::ResolutionSetup::Res2X
                                               : Settings::ResolutionSetup::Res1X));
-            CHECK(settings->anti_aliasing.GetValue() == (quality == Quality::High
-                                                             ? Settings::AntiAliasing::Smaa
-                                                             : Settings::AntiAliasing::Fxaa));
+            CHECK(settings->anti_aliasing.GetValue() == (quality == Quality::Low
+                                                             ? Settings::AntiAliasing::Fxaa
+                                                             : Settings::AntiAliasing::Smaa));
             CHECK(settings->astc_recompression.GetValue() ==
                   (quality == Quality::High ? Settings::AstcRecompression::Uncompressed
                                             : Settings::AstcRecompression::Bc3));
             CHECK(settings->max_anisotropy.GetValue() ==
-                  (quality == Quality::Low    ? Settings::AnisotropyMode::X2
-                   : quality == Quality::High ? Settings::AnisotropyMode::X16
-                                              : Settings::AnisotropyMode::X4));
+                  (quality == Quality::Low ? Settings::AnisotropyMode::X2
+                                           : Settings::AnisotropyMode::X16));
+            CHECK(settings->max_anisotropy.GetValue(true) == Settings::AnisotropyMode::X8);
             CHECK(settings->renderer_backend.GetValue() == Settings::RendererBackend::Vulkan);
             const bool legacy = preset.program_id == Settings::SuperMarioBrosWonderProgramId ||
                                 preset.program_id == Settings::KirbyForgottenLandProgramId;
@@ -237,7 +237,8 @@ TEST_CASE("Changing quality replaces every visual override and ignores unsupport
     CHECK(settings->max_anisotropy.GetValue() == Settings::AnisotropyMode::X2);
     REQUIRE(Settings::ApplyGamePreset(*settings, title, true));
     CHECK(settings->resolution_setup.GetValue() == Settings::ResolutionSetup::Res1X);
-    CHECK(settings->max_anisotropy.GetValue() == Settings::AnisotropyMode::X4);
+    CHECK(settings->anti_aliasing.GetValue() == Settings::AntiAliasing::Smaa);
+    CHECK(settings->max_anisotropy.GetValue() == Settings::AnisotropyMode::X16);
     CHECK_FALSE(Settings::ApplyGamePreset(*settings, 0, Quality::High));
     CHECK_FALSE(Settings::ApplyGamePreset(*settings, Settings::MarioTennisFeverProgramId + 1,
                                           Quality::Low));

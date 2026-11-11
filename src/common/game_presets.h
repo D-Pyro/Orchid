@@ -170,6 +170,12 @@ inline bool ApplyGamePreset(Values& settings, u64 program_id, GamePresetQuality 
     }
     preset->apply(settings, false);
     const auto session = Detail::SessionSetter(false);
+    // Tiers by host class: Low for weak GPUs, Standard for mid-range, High for high-end cards.
+    // Measured on a RX 9070 XT at the fps cap (Mario Tennis Fever, Wonder, Bananza, Hyrule
+    // Warriors, Pokopia): SMAA and 16x anisotropy each cost 0-2 points of GPU load at 1x, so
+    // Standard has them; 2x resolution costs about 15 points and 2-3 GB of graphics memory,
+    // uncompressed ASTC more memory again, so those stay in High. The console mode stays the
+    // user's choice in every tier.
     switch (quality) {
     case GamePresetQuality::Low:
         session(settings.resolution_setup, ResolutionSetup::Res3_4X);
@@ -185,9 +191,9 @@ inline bool ApplyGamePreset(Values& settings, u64 program_id, GamePresetQuality 
         break;
     default:
         session(settings.resolution_setup, ResolutionSetup::Res1X);
-        session(settings.anti_aliasing, AntiAliasing::Fxaa);
+        session(settings.anti_aliasing, AntiAliasing::Smaa);
         session(settings.astc_recompression, AstcRecompression::Bc3);
-        session(settings.max_anisotropy, AnisotropyMode::X4);
+        session(settings.max_anisotropy, AnisotropyMode::X16);
         break;
     }
     return true;
