@@ -138,6 +138,10 @@ void LoadEarlyOverrides(std::uint64_t program_id) {
             // RX 9070 XT, first world map with the fps option at 240: 140 presents a second
             // before, 182 after (three runs each). Balanced fences signal as High did.
             [[fallthrough]];
+        case TitleID::KirbyForgottenLandNintendoSwitch2Edition:
+            // Same GPU thread split. RX 9070 XT, Waddle Dee Town at 1x: 51-53 fps with the global
+            // defaults (four runs), 60.0 with these (three runs, alternating), 1% low 32 -> 55.
+            [[fallthrough]];
         case TitleID::Orbitals:
             // Apply before CPU/renderer setup, including their cached accuracy and memory policy.
             OverrideIfGlobal(Settings::values.gpu_accuracy, Settings::GpuAccuracy::Low);

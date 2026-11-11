@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include "common/settings.h"
 #include "common/scope_exit.h"
 #include "core/frontend/emu_window.h"
@@ -145,7 +146,7 @@ TEST_CASE("Orbitals uses coherent native defaults while preserving custom settin
     }
 }
 
-TEST_CASE("Wonder Switch 2 Edition gets the split-friendly GPU defaults", "[game_settings]") {
+TEST_CASE("Wonder and Kirby Switch 2 Editions get the split-friendly GPU defaults", "[game_settings]") {
     auto& accuracy = Settings::values.gpu_accuracy;
     auto& fences = Settings::values.gpu_fence_behavior;
     auto& reactive = Settings::values.use_reactive_flushing;
@@ -167,9 +168,12 @@ TEST_CASE("Wonder Switch 2 Edition gets the split-friendly GPU defaults", "[game
     reactive.SetValue(true);
     FakeWindow window;
     FakeRenderer renderer{window};
+    // Wonder, Kirby and the Forgotten Land: the Switch 2 Edition is the Switch 1 ID + 0x0300...1.
+    const std::uint64_t switch1 = GENERATE(0x010015100B514000ULL, 0x01004D300C5AE000ULL);
+    const std::uint64_t switch2 = switch1 + 0x0300000000000001ULL;
 
     SECTION("Before the renderer exists") {
-        Core::GameSettings::LoadEarlyOverrides(0x040015100B514001ULL);
+        Core::GameSettings::LoadEarlyOverrides(switch2);
         CHECK(accuracy.GetValue() == Settings::GpuAccuracy::Low);
         CHECK(Settings::values.current_gpu_accuracy == Settings::GpuAccuracy::Low);
         CHECK(fences.GetValue() == Settings::GpuFenceBehavior::Balanced);
@@ -177,15 +181,15 @@ TEST_CASE("Wonder Switch 2 Edition gets the split-friendly GPU defaults", "[game
         CHECK(accuracy.GetValue(true) == Settings::GpuAccuracy::High);
     }
     SECTION("Again after the configuration dialog reset them, which calls LoadOverrides only") {
-        Core::GameSettings::LoadOverrides(0x040015100B514001ULL, renderer);
+        Core::GameSettings::LoadOverrides(switch2, renderer);
         CHECK(accuracy.GetValue() == Settings::GpuAccuracy::Low);
         CHECK(Settings::values.current_gpu_accuracy == Settings::GpuAccuracy::Low);
         CHECK(fences.GetValue() == Settings::GpuFenceBehavior::Balanced);
         CHECK_FALSE(reactive.GetValue());
     }
     SECTION("The Switch 1 release keeps the inherited settings") {
-        Core::GameSettings::LoadEarlyOverrides(0x010015100B514000ULL);
-        Core::GameSettings::LoadOverrides(0x010015100B514000ULL, renderer);
+        Core::GameSettings::LoadEarlyOverrides(switch1);
+        Core::GameSettings::LoadOverrides(switch1, renderer);
         CHECK(accuracy.GetValue() == Settings::GpuAccuracy::High);
         CHECK(fences.GetValue() == Settings::GpuFenceBehavior::Default);
         CHECK(reactive.GetValue());
