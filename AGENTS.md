@@ -137,14 +137,45 @@ It runs on the maintainer's ChatGPT subscription and spares the Claude limits. N
 
   | Game | Snapshot | Route | Ends in |
   |---|---|---|---|
-  | Mario Tennis Fever | `mtf-after-first-practice-20261107` | `mtf-mario-yoshi-stadium-match-v1` | Free Play match, several points played |
-  | Donkey Kong Bananza | `bananza-leon-import-20261107` | `bananza-leon-tunnel-entry-v3` | mining tunnel, HUD checkpoint |
-  | Yoshi and the Mysterious Book | `yoshi-chapter-one-saved-20261106-2114` | `yoshi-wildwoods-entry-v1` | Wildwoods level, Yoshi controllable |
+  | Mario Tennis Fever | `mtf-after-first-practice-20261107` | `mtf-stadium-match-v3` | Free Play match (waits for the player HUD) |
+  | Donkey Kong Bananza | `bananza-leon-import-20261107` | `bananza-leon-tunnel-entry-v4` | mining tunnel, HUD checkpoint |
+  | Yoshi and the Mysterious Book | `yoshi-chapter-one-saved-20261106-2114` | `yoshi-wildwoods-entry-v2` | Wildwoods level, Yoshi controllable |
+  | Super Mario Bros. Wonder | `wonder-goal60-overworld-20261107` | `wonder-level-entry-v2` | inside a level, HUD checkpoint |
+  | Pokémon Pokopia | `pokopia-intro-language-set-20261107` | `pokopia-cave-v3` | first cave, character controllable |
+  | Hyrule Warriors: Age of Imprisonment | `hw-blur-mission-20261106` (2x; the gate overrides to 1x) | `hw-mission-v2` (long: `route_start`) | mission, objective text checkpoint |
+  | Star Fox | `starfox-tutorial-controls-loop-20261107` | `starfox-flight-v3` | flight tutorial, Arwing controllable |
+  | Kirby and the Forgotten Land | `kirby-leon-dlc-20261110` | `kirby-stage-v2` | stage "Meteor Shower's Arrival" (no HUD at full health: checkpoint on the mission screen before, confirm on the screenshot) |
   | Orbitals | `initial` | none: wait 60 s, then A, DDOWN x3, A, A, A, A (2 s apart), accept the EULA | main menu |
 
-- `route_play` waits by itself until 35 s after boot before the first input (the routes were
-  recorded with that lead-in). Routes are timed inputs; only Bananza ends with a checkpoint, so
-  confirm where a run ended on the last screenshot.
+  All but Orbitals are registered for the gate (`gate_list`). Kirby Air Riders has no route on
+  purpose: its races can hang the GPU (README: do not play).
+
+- Routes should wait for screens, not for seconds: `wait_checkpoint(name, buttons=..)` waits until
+  a recorded screen region appears (optionally pressing a button meanwhile) and is saved into the
+  route, so a replay survives longer loading. `route_list` shows `screen_waits` per route; a route
+  with 0 is timed inputs only (`route_play` then keeps the 35 s lead-in it was recorded with) and
+  where it ended must be confirmed on the last screenshot. A failed checkpoint says how close the
+  screen came ("closest rmse 0.090, limit 0.08"): close = limit too strict or another build's
+  picture, far = wrong scene.
+- Checkpoints: region on HUD that only exists in that scene, at most 120000 px (then the picture
+  may sit up to 8 px elsewhere, which it does between builds), `max_rmse` about 0.12, recorded on
+  the current build and checked twice. `checkpoint_list` shows which are usable.
+- Every `boot` should pass `bin=<build under test>`; without it the harness's stored default build
+  runs and the reply says so. `default_binary_set` replaces the default (the last good build).
+  `queue_s=240` waits for the GPU test lock instead of failing while another agent tests (call
+  again if it is still held); the
+  error names the holder. A session unused for 15 minutes is stopped to free the lock.
+- More `boot` options: `settings={"use_docked_mode":"1"}` overrides `qt-config.ini` keys for one
+  run (no extra snapshot needed); `audio=True` records the sound (see "Sound checks").
+  `boot_ui` opens the frontend without a game; drive it with `click`, `hotkey`, `type_text`.
+  `seed_import` makes a snapshot from the maintainer's saves (and settings) or raw save files.
+- Judging a run: `health` (ok / stalled / device_lost / gpu_reset / exited; "alive" alone does not
+  tell a hang from a running game), `summary` (frame times, log errors, and which error groups are
+  new against the baseline of that game and route), `clip` (a few seconds as one sheet of frames,
+  for flicker and animation). `stop` returns the summary, the audio report and, after a crash,
+  a backtrace from the core dump. `baseline_save` stores a run you checked as "last good".
+- Long runs are jobs, polled with `job_status(wait_s=240)`: `soak_start` (minutes under watch,
+  ends at a hang with thread backtraces), `gate_start`, `desktop_run_start`, `benchmark_start`.
 - `boot` returns `out`, the run directory. Screenshots: `<out>/NNNN-<name>.png`. Frame times:
   `<out>/frames/*.csv` (column `frame_ms`, one row per guest frame). Log: what the `log` and
   `wait_log` tools read, on disk `<out>/profile/data/eden/log/orchid_<tag>_<title id>.txt`, after
@@ -155,11 +186,12 @@ It runs on the maintainer's ChatGPT subscription and spares the Claude limits. N
 - Say in the brief: every reported screenshot must be opened and described, and an obstacle in
   one run is a result to write down, not a reason to skip the remaining runs. When a number or a
   log count decides the outcome, check it against the log yourself.
-- The harness lives in `~/.local/share/codex-orchid-mcp/` (not in this repository). A running MCP
-  server keeps the code it started with; changes reach a session only after its restart.
-- Checkpoint reference images are in `state/checkpoints/`. Five older checkpoints lost theirs with
-  deleted run directories and must be recorded again before use: `mtf-title-menu-v1`,
-  `pokopia-cave-walking-v1`, `air-startup-loading-v1`, both `hw-*`.
+- The harness lives in `~/.local/share/codex-orchid-mcp/` (its own local git repository, not this
+  one). A running MCP server keeps the code it started with; changes reach a session only after
+  its restart. After changing it: `uv run --script selftest.py` (no emulator needed), then
+  `uv run --script livetest.py <binary> core` (real boot; more tests in its header).
+- Its `state/` cleans itself at every boot (`cleanup`): profile clones of runs after 2 days, whole
+  runs and bundles after 14 days. Screenshots, logs and frame times of a run stay until then.
 
 ### Gameplay gate: only before a release or a PR
 
@@ -168,9 +200,13 @@ listed under "Project scope" in `README.md` once and play it briefly into real g
 title or main menu). Plain commits and pushes to `main` need no gate, including the maintainer's
 own commits.
 
-- Per game: boot, reach gameplay (saved route from the table above, otherwise by hand), play about
-  a minute, take screenshots, stop. Skip a game only if it is not on the PC or is known not to
-  reach gameplay yet (README table); name every skipped game in the result.
+- Run it with `gate_start(bin=<build>)`: every game registered with `gate_set` (see `gate_list`)
+  is booted, played along its route into gameplay and on for about a minute, and stopped; the
+  result gives pass / review / fail per game with reasons and one contact sheet of all last
+  frames. A scope game without a gate entry is played by hand as before. Skip a game only if it
+  is not on the PC or is known not to reach gameplay yet (README table); name every skipped game.
+- The harness cannot judge rendering: open the contact sheet (and single screenshots where it is
+  too small). After a gate you accept, `gate_accept` stores its runs as the new baselines.
 - Pass: each game renders correctly (characters, world, HUD, text without missing glyphs), runs
   without hang, crash or device loss, and its log shows no new errors compared with the last good
   build. A game that worked in the last good build and fails now blocks the release or PR.
@@ -186,6 +222,13 @@ own commits.
   `~/orchid-perf/<date>-<label>/summary.txt`. Compare runs with `orchid-perf-summary <dir>...`.
   Plain `agent-run` is not a valid measurement while other builds may run. The visible window on
   the desktop is expected.
+- Unattended: `desktop_run_start(label, bin, game, snapshot, route)` of the `orchid` MCP runs
+  `orchid-test-run` with a clone of the snapshot and replays the route's button presses by time
+  (`EDEN_AUTO_BUTTONS`; play the route once with `route_play` before, that records the times). It
+  returns `summary.txt` and a screenshot of the window; where the run ended is known only from
+  that screenshot. An AppImage works as `bin`, so this also covers the release build in a real
+  window. The frame times of a normal `boot` are guest work on a software-presented private
+  display: good for comparing two runs there, not a number to report.
 - Measure in the real scene (an actual match or gameplay, not menus or videos) at 1x resolution
   scaling, and judge against the fps cap. Loop (baseline first, one change per run): skill
   `orchid-fps-bench`.
@@ -196,15 +239,21 @@ own commits.
 
 ### Sound checks (dropouts show up as gaps in the waveform)
 
-`PULSE_SINK=orchid_test` keeps the speakers silent and records only the emulator:
+`boot(audio=True)` of the `orchid` MCP unmutes the game into a private null sink, keeps the
+speakers silent and records `<out>/audio.wav`; `stop` reports its silences (`middle_silences` =
+between start and end). `readiness.audio.streams` in the boot reply must be 1 or more; 0 means
+the sound is on the speakers instead: stop at once. By hand the same looks like this:
 
 ```sh
 M=$(pactl load-module module-null-sink sink_name=orchid_test)
 parec -d orchid_test.monitor --file-format=wav rec.wav &   # start before the game, kill afterwards
-# ... PULSE_SINK=orchid_test agent-run <binary> -g <game> ...
+# ... PIPEWIRE_NODE=orchid_test PULSE_SINK=orchid_test agent-run <binary> -g <game> ...
 ffmpeg -hide_banner -i rec.wav -af silencedetect=n=-60dB:d=0.02 -f null - 2>&1 | grep silence_
 pactl unload-module $M
 ```
+
+Orchid's SDL talks to PipeWire directly and ignores `PULSE_SINK` (measured 2026-11-11: the
+recording stayed silent and the game played on the speakers); `PIPEWIRE_NODE` is what routes it.
 
 - Silence of 20 ms or more in the middle of continuous music or effects is a dropout (underrun).
   Silence at the start, on loading screens and in real game pauses is normal.
@@ -213,8 +262,8 @@ pactl unload-module $M
 - Baselines: `~/orchid-perf/audio-baseline/<game>-<scene>.wav`, one fixed scene per game. Create
   the baseline from the last known good build before judging a change, and keep it up to date.
 - This finds gaps, not wrong pitch, wrong tempo or missing instruments; for those compare length
-  and a spectrogram with the baseline. Verified with a test tone containing an 80 ms gap, not yet
-  with Orchid itself (check that the audio backend honours `PULSE_SINK`).
+  and a spectrogram with the baseline. Verified with a test tone containing an 80 ms gap and
+  with a Mario Tennis Fever boot (recording not silent, peak -31.7 dB).
 
 ### Builds: PC or laptop
 
@@ -278,8 +327,9 @@ test binaries under `~/Orchid/orchid-builds/` and private builds under `~/.cache
 ### Disk budget (clean up regularly, not only at task end)
 
 Limit 100 GB for everything agents create: the worktrees above, their `build*/` directories,
-`~/Orchid/orchid-builds/`, `~/.cache/orchid-mutation/`, the compiler cache `~/.cache/orchid/`, and
-perf runs in `~/orchid-perf/` and `~/Orchid/orchid-perf/`. Not counted and never deleted for
+`~/Orchid/orchid-builds/`, `~/.cache/orchid-mutation/`, the compiler cache `~/.cache/orchid/`,
+perf runs in `~/orchid-perf/` and `~/Orchid/orchid-perf/`, and the harness state
+`~/.local/share/codex-orchid-mcp/state/` (it cleans itself, see "Harness facts"). Not counted and never deleted for
 space: game data (`.nup`, dumps), the main checkout, issue attachments in
 `~/Orchid/orchid-issues/`. A source checkout is about 0.5 GB, a build directory several GB, so
 only a handful of worktrees with builds fit: one worktree per active task, removed when it ends.
@@ -288,7 +338,8 @@ Check at the start and end of every Orchid task, and before creating a worktree:
 
 ```sh
 du -sch ~/.t3/worktrees/Eglantine ~/src/Eglantine-* ~/Documents/Codex ~/Orchid/orchid-builds \
-  ~/.cache/orchid-mutation ~/.cache/orchid ~/orchid-perf ~/Orchid/orchid-perf 2>/dev/null | tail -1
+  ~/.cache/orchid-mutation ~/.cache/orchid ~/orchid-perf ~/Orchid/orchid-perf \
+  ~/.local/share/codex-orchid-mcp/state 2>/dev/null | tail -1
 ```
 
 Above the limit, clean until below it, in this order, each only under the safety rules above:
