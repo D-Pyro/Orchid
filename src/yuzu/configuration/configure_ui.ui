@@ -29,7 +29,7 @@
          <string>Library with game artwork, sidebar menus and game details. Turn off to return to the classic menu bar and game list.</string>
         </property>
         <property name="text">
-         <string>Modern interface</string>
+         <string>Modern interface (experimental)</string>
         </property>
        </widget>
       </item>
