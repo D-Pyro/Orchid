@@ -74,6 +74,9 @@ constexpr u16 TlvSourceDump = 0x0008;
 // ExtractNup leaves each package's metadata block in this file at the package's root, because the
 // name, icon, control data and display version of an archive are not files of the dump.
 constexpr std::string_view MetaSidecar = ".nupmeta";
+// Only in a .nupmeta file, never in an archive: the version of a base package (u32, little
+// endian), which the folder layout has no place for.
+constexpr u16 SidecarBaseVersion = 0xFF00;
 
 constexpr int JournalVersion = 1;
 constexpr u64 ProgressStep = 64ULL * 1024 * 1024;
@@ -816,6 +819,12 @@ private:
                 continue;
             }
             for (auto& [type, payload] : ParseTlvs(ReadWholeFile(sidecar))) {
+                if (type == SidecarBaseVersion) {
+                    if (plan.packages[i].kind == KindBase && payload.size() == sizeof(u32)) {
+                        std::memcpy(&plan.packages[i].version, payload.data(), payload.size());
+                    }
+                    continue;
+                }
                 const bool stored_wins =
                     type == TlvTitleName || type == TlvIcon || type == TlvDisplayVersion;
                 const bool supplied =
@@ -1517,6 +1526,7 @@ private:
                              (depth == 0 || (depth == 1 && entry.path.starts_with("data/")));
             if (top) {
                 const auto source = dump_root / FromUtf8(entry.source);
+                RemoveFile(source.parent_path() / MetaSidecar);
                 RemoveEmptyTree(source);
                 RemoveEmptyParents(source.parent_path(), dump_root);
             }
@@ -1609,6 +1619,23 @@ Metadata ProbeMetadata(const fs::path& dump_root) {
 
     Metadata result;
     const auto probe = [&](const fs::path& dir, const std::string& label, bool names) {
+        // What ExtractNup stored wins over the dump's own, as it does when packing.
+        if (const auto sidecar = dir / MetaSidecar; IsFile(sidecar)) {
+            try {
+                for (auto& [type, payload] : ParseTlvs(ReadWholeFile(sidecar))) {
+                    if (type == TlvDisplayVersion && result.display_version.empty()) {
+                        result.display_version.assign(payload.begin(), payload.end());
+                        result.version_source = label;
+                    } else if (type == TlvTitleName && names && result.title_name.empty()) {
+                        result.title_name.assign(payload.begin(), payload.end());
+                    } else if (type == TlvIcon && names && result.icon.empty()) {
+                        result.icon = std::move(payload);
+                    }
+                }
+            } catch (const PackError&) {
+                // PackDump reports a damaged file; probing shows what the dump has.
+            }
+        }
         const auto loader = OpenLoader(vfs, dir);
         if (!loader) {
             return;
@@ -1789,8 +1816,14 @@ public:
                 }
                 return true;
             });
-            const auto meta = file->ReadBytes(packages[i].meta_size,
-                                              static_cast<size_t>(packages[i].meta_offset));
+            auto meta = file->ReadBytes(packages[i].meta_size,
+                                        static_cast<size_t>(packages[i].meta_offset));
+            if (packages[i].kind == NupContainer::PackageKind::Base && packages[i].version != 0) {
+                std::vector<u8> version(sizeof(u32));
+                std::memcpy(version.data(), &packages[i].version, version.size());
+                const auto record = SerializeTlvs({{SidecarBaseVersion, std::move(version)}});
+                meta.insert(meta.end(), record.begin(), record.end());
+            }
             const auto sidecar = root / MetaSidecar;
             if (!meta.empty() && !fs::exists(sidecar, ec) &&
                 Common::FS::IOFile{sidecar, Common::FS::FileAccessMode::Write}.WriteSpan(

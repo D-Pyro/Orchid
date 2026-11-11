@@ -78,7 +78,8 @@ bool HasResumableJournal(const std::filesystem::path& archive);
 // dlc/<titleid>/<version>/. Each file is checked against its stored SHA-256. `output` must be
 // missing or empty; a failed or cancelled run removes what it wrote. Each package folder also
 // gets a .nupmeta file with the package's stored metadata (name, icon, control data, display
-// version), which PackDump reads back, so that packing the folder again loses none of it.
+// version, a base's package version), which PackDump and ProbeMetadata read back, so that
+// packing the folder again loses none of it.
 PackResult ExtractNup(const std::filesystem::path& archive, const std::filesystem::path& output,
                       const std::function<void(const PackProgress&)>& progress = {},
                       const std::atomic_bool* cancel = nullptr, std::string* error_out = nullptr);

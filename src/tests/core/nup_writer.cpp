@@ -1100,6 +1100,9 @@ TEST_CASE("NUP repacking an extracted archive keeps its metadata", "[nup]") {
     const auto output = t.path / "out" / "Game";
     REQUIRE(FileSys::Nup::ExtractNup(archive, output) == FileSys::Nup::PackResult::Success);
     REQUIRE(fs::is_regular_file(output / "base/.nupmeta"));
+    // A base of version 0 needs no version record.
+    REQUIRE(ReadAll(output / "base/.nupmeta").find(std::string("\x00\xFF\x00\x00\x04", 5)) ==
+            std::string::npos);
 
     // The name, icon and version are not files of the dump; they come back from .nupmeta.
     const auto repacked = t.path / "out" / "Game.nup";
@@ -1127,10 +1130,64 @@ TEST_CASE("NUP repacking an extracted archive keeps its metadata", "[nup]") {
     }
     REQUIRE(ReadAll(third).find(".nupmeta") == std::string::npos);
 
-    // A .nupmeta whose record runs past the end of the file is refused.
+    // The pack dialog shows the stored values, not only what the dump's own files give.
+    const auto probed = FileSys::Nup::ProbeMetadata(output);
+    REQUIRE(probed.title_name == "Renamed");
+    REQUIRE(probed.icon == options.metadata.icon);
+    REQUIRE(probed.display_version == "9.9.9");
+
+    // A .nupmeta whose record runs past the end of the file is refused when packing; probing
+    // falls back to the dump's own files.
     Put(output / "base/.nupmeta", std::string("\x05\x00\x00\x00\x09\x00\x00\x00short", 13));
     REQUIRE(FileSys::Nup::PackDump(output, t.path / "Bad.nup") ==
             FileSys::Nup::PackResult::InvalidSource);
+    REQUIRE(FileSys::Nup::ProbeMetadata(output).title_name != "Renamed");
+}
+
+TEST_CASE("NUP repacking keeps a base package's version", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    // Archives of other packers give the base a version (here 1.0.0); .nupmeta carries it.
+    const std::string version_record("\x00\xFF\x00\x00\x04\x00\x00\x00\x04\x03\x02\x01", 12);
+    // Three-byte records; types 3, 4 and 5 are the icon, display version and title name.
+    const auto record = [](char type, const std::string& text) {
+        return type + std::string("\x00\x00\x00\x03\x00\x00\x00", 7) + text;
+    };
+    Put(root / "Base/.nupmeta",
+        record(3, "ico") + record(4, "1.0") + record(5, "Abc") + version_record);
+    Put(root / "updates/131072/.nupmeta", record(4, "2.0") + version_record);
+    // The newest update's stored display version is shown, not the base's.
+    REQUIRE(FileSys::Nup::ProbeMetadata(root).display_version == "2.0");
+    REQUIRE(FileSys::Nup::ProbeMetadata(root).version_source == "update 131072");
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    REQUIRE(ReadAll(archive).find(version_record) == std::string::npos);
+
+    const auto output = t.path / "out" / "Game";
+    REQUIRE(FileSys::Nup::ExtractNup(archive, output) == FileSys::Nup::PackResult::Success);
+    REQUIRE(ReadAll(output / "base/.nupmeta").ends_with(version_record));
+    REQUIRE(ReadAll(output / "updates/131072/.nupmeta").find(version_record.substr(0, 8)) ==
+            std::string::npos);
+    const auto repacked = t.path / "out" / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(output, repacked) == FileSys::Nup::PackResult::Success);
+    REQUIRE(ReadAll(repacked) == ReadAll(archive));
+
+    FileSys::RealVfsFilesystem real;
+    NupContainer nup{real.OpenFile(repacked.string(), FileSys::OpenMode::Read)};
+    REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+    // Only a base takes its version from .nupmeta; an update's is its folder name.
+    std::vector<u32> versions;
+    for (const auto& package : nup.GetPackages()) {
+        versions.push_back(package.version);
+    }
+    REQUIRE(versions == std::vector<u32>{0x01020304, 65536, 131072, 0});
+
+    // Low-storage packing leaves no .nupmeta behind, so the emptied package folders go away.
+    REQUIRE(FileSys::Nup::PackDump(output, t.path / "Low.nup", {.delete_sources = true}) ==
+            FileSys::Nup::PackResult::Success);
+    REQUIRE_FALSE(fs::exists(output / "base"));
+    REQUIRE_FALSE(fs::exists(output / "updates"));
 }
 
 TEST_CASE("NUP keeps an empty RomFS folder of a program whose data is in its add-ons", "[nup]") {
