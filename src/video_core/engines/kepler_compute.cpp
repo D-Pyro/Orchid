@@ -704,8 +704,24 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
             converting = true;
         }
     }
-    if (!input || !output)
+    // Says why the stand-in gave up and how often: a failed one leaves that frame's upscaled
+    // image unwritten. The first eight, then every 600th (about every 10 s when each frame fails).
+    const auto fail = [&](std::string_view reason) {
+        static u64 count{};
+        if (++count <= 8 || count % 600 == 0) {
+            const auto describe = [](const std::optional<Texture::TICEntry>& tic) {
+                return tic ? fmt::format("{:#x} {}x{} format {:#x}", tic->Address(), tic->Width(),
+                                         tic->Height(), static_cast<u32>(tic->format.Value()))
+                           : std::string{"none"};
+            };
+            LOG_ERROR(HW_GPU, "Upscale fallback failed ({} so far): {}; program {:#x}, grid {}x{}, input {}, output {}",
+                      count, reason, regs.code_loc.Address(), launch_description.grid_dim_x.Value(),
+                      launch_description.grid_dim_y.Value(), describe(input), describe(output));
+        }
         return false;
+    };
+    if (!input || !output)
+        return fail("no input/output image pair in the constants");
     using RTFormat = Tegra::RenderTargetFormat;
     // A converting blit keeps sRGB views so it encodes or decodes; a same-format copy stays raw.
     const auto render_format = [converting](const Texture::TICEntry& tic) -> std::optional<RTFormat> {
@@ -721,7 +737,7 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
     };
     const auto input_format = render_format(*input), output_format = render_format(*output);
     if (!input_format || !output_format)
-        return false;
+        return fail("image format has no render target format");
     const RTFormat format = *input_format;
     const auto surface = [&](const Texture::TICEntry& tic) {
         Fermi2D::Surface result{};
@@ -918,7 +934,7 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
             LOG_INFO(HW_GPU, "Upscale fallback converts format {:#x} -> {:#x}",
                      static_cast<u32>(*input_format), static_cast<u32>(*output_format));
     }
-    return done;
+    return done || fail("copy not accelerated");
 }
 
 void KeplerCompute::ProcessLaunch() {

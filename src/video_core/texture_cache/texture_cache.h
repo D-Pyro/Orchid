@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <algorithm>
 #include <numeric>
 #include <cstdlib>
@@ -337,6 +338,15 @@ void TextureCache<P>::TickFrame() {
             if (native_thresholds_applied && budget_check_frames++ % 30 == 0) {
                 const u64 budget = runtime.GetDeviceMemoryBudget();
                 native_driver_budget_available = budget != 0;
+                // Once a minute, next to the frontend's "Host resources" line: a report of a
+                // freeze or crash then shows whether device memory was running out before it.
+                static std::chrono::steady_clock::time_point last_usage_log{};
+                if (const auto now = std::chrono::steady_clock::now();
+                    now - last_usage_log >= std::chrono::minutes{1}) {
+                    last_usage_log = now;
+                    LOG_INFO(HW_GPU, "Device memory: {} MiB in use, driver budget {} MiB, texture cache {} MiB",
+                             runtime.GetDeviceMemoryUsage() >> 20, budget >> 20, total_used_memory >> 20);
+                }
                 if (budget != 0) {
                     const u64 old_critical = critical_memory;
                     const u64 margin = (std::min)(budget / 8, 1_GiB);

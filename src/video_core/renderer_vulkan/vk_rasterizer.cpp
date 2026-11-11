@@ -4,6 +4,11 @@
 // SPDX-FileCopyrightText: Copyright 2019 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -248,6 +253,37 @@ RasterizerVulkan::~RasterizerVulkan() {
 }
 
 
+// EDEN_NX2_HANG_TRACE=<file>: finds the dispatch or draw that hangs the host GPU. Every compute
+// dispatch is written to the file before it is recorded and then waited for ("done"); every draw
+// is written with the programs of its stages and the tick it is recorded under. After a hang the
+// culprit is the last compute line without a "done", or one of the draws listed since the last
+// "done". Program addresses are the ones in the EDEN_NX2_SHADER_DUMP file names. Lines are flushed
+// to the kernel at once and survive the process; every 4096 lines they are forced to disk, so a
+// machine that freezes and is switched off loses a second or two at most. The trace alternates
+// between <file> and <file>.1 every 200000 lines, so it stays bounded. Slow: debugging only.
+static std::FILE* HangTraceFile() {
+    static const char* const path = std::getenv("EDEN_NX2_HANG_TRACE");
+    if (!path) return nullptr;
+    static std::FILE* file{};
+    static u64 lines{};
+    static bool second{};
+    if (!file || ++lines % 200000 == 0) {
+        if (file) {
+            std::fclose(file);
+            second = !second;
+        }
+        file = std::fopen(second ? (std::string{path} + ".1").c_str() : path, "w");
+    }
+    if (file && lines % 4096 == 0) {
+#ifdef _WIN32
+        _commit(_fileno(file));
+#else
+        fsync(fileno(file));
+#endif
+    }
+    return file;
+}
+
 template <typename Func>
 void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
     if (g_yo.enabled) {
@@ -271,6 +307,19 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
         Profile::Scope scope{Profile::Zone::FlushWork};
         FlushWork();
         gpu_memory->FlushCaching();
+    }
+    if (std::FILE* const hang_trace = HangTraceFile()) {
+        const auto& regs = maxwell3d->regs;
+        const auto program = [&](size_t stage) {
+            return static_cast<unsigned long long>(
+                (u64{regs.pipelines[stage].reserved[0] & 0xff} << 32) | regs.pipelines[stage].reserved[1]);
+        };
+        static u64 draw_count{};
+        std::fprintf(hang_trace, "draw #%llu tick %llu programs %#llx %#llx %#llx %#llx %#llx %#llx\n",
+                     static_cast<unsigned long long>(++draw_count),
+                     static_cast<unsigned long long>(scheduler.CurrentTick()), program(0), program(1),
+                     program(2), program(3), program(4), program(5));
+        std::fflush(hang_trace);
     }
 
     const auto report_failure = [&](std::string_view reason) {
@@ -1127,6 +1176,34 @@ void RasterizerVulkan::DispatchCompute() {
         g_yo.Begin("dispatch");
     }
     FlushWork();
+    std::FILE* const hang_trace = HangTraceFile();
+    static u64 hang_trace_count{};
+    const auto hang_trace_start = std::chrono::steady_clock::now();
+    if (hang_trace) {
+        const auto& launch = kepler_compute->launch_description;
+        std::fprintf(hang_trace, "compute #%llu tick %llu program %#llx grid %ux%ux%u block %ux%ux%u indirect %d\n",
+                     static_cast<unsigned long long>(++hang_trace_count),
+                     static_cast<unsigned long long>(scheduler.CurrentTick()),
+                     static_cast<unsigned long long>(kepler_compute->regs.code_loc.Address()),
+                     static_cast<u32>(launch.grid_dim_x), static_cast<u32>(launch.grid_dim_y),
+                     static_cast<u32>(launch.grid_dim_z), static_cast<u32>(launch.block_dim_x),
+                     static_cast<u32>(launch.block_dim_y), static_cast<u32>(launch.block_dim_z),
+                     kepler_compute->GetIndirectComputeAddress().has_value() ? 1 : 0);
+        std::fflush(hang_trace);
+    }
+    // Declared before the cache locks below, so the wait runs after they are released.
+    SCOPE_EXIT {
+        if (!hang_trace) return;
+        // EDEN_NX2_HANG_TRACE_SYNC: waiting per dispatch names the hanging one exactly, but hides
+        // timing-dependent hangs, so it is opt-in.
+        static const bool sync = std::getenv("EDEN_NX2_HANG_TRACE_SYNC") != nullptr;
+        if (sync) scheduler.Finish();
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - hang_trace_start);
+        std::fprintf(hang_trace, "done #%llu %lld us\n", static_cast<unsigned long long>(hang_trace_count),
+                     static_cast<long long>(elapsed.count()));
+        std::fflush(hang_trace);
+    };
     gpu_memory->FlushCaching();
 
     std::optional<u64> diagnostic_key;
