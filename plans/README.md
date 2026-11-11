@@ -19,7 +19,7 @@ committed.
 | [001](001-keep-real-vfs-children-inside-their-directory.md) | Host file creation and deletion through `RealVfsDirectory` stays inside the directory | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `6705eb8a08`) |
 | [002](002-reject-gaps-in-solid-ncz-sections.md) | A solid NCZ with a gap between sections fails cleanly | P1 | S | — | DONE (reviewed 2026-11-10, pushed to main as `70f62fdbb8`) |
 | [003](003-extract-multi-program-nup-archives.md) | NUP archives of Switch 2 Edition dumps can be extracted again | P1 | S | — | DONE (reviewed 2026-11-10, on main as `nup: extract multi-program archives into program/<index>`) |
-| [004](004-lower-high-offset-64-bit-constant-loads.md) | 64-bit constant loads at offsets 0x8000 and above read the right bytes | P2 | S | — | TODO |
+| [004](004-lower-high-offset-64-bit-constant-loads.md) | 64-bit constant loads at offsets 0x8000 and above read the right bytes | P2 | S | — | DONE (reviewed 2026-11-11, on main as `ampere: load 64-bit constants past 0x7fff as two 32-bit reads` plus `tests: pin the write mask of the two-read 64-bit constant load`) |
 | [005](005-zip-extraction-without-archive-symlinks.md) | Zip extraction never creates links from the archive | P2 | S | — | DONE (reviewed 2026-11-10, pushed to main as `b709dffe15`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale — finding fixed independently or approach abandoned)
@@ -53,6 +53,14 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   Reviewer re-ran: `[nup]` 25/25 including the byte-for-byte repack, full suite 673 cases green,
   scope = the three in-scope files. Mutation check 100 % (4 killed, 0 survived) over lines
   1631-1634 and 1673-1674 of `nup_writer.cpp`. APPROVED.
+
+- 2026-11-11: plan 004 executed by a Sonnet executor. Reviewer re-ran: `[constant_load]` 2/2,
+  `[ampere]` 188 cases, full suite 674 cases green; diff equals the plan. First mutation check
+  scored 90.9 %: two mutants of the MOV write mask (`u64{15} << 39`) survived because the test
+  did not pin bits 39-42. One revision round added that assertion; the re-run scored 100 %
+  (22 killed, 0 survived) over lines 412, 420 and 423 of `lower_to_maxwell.h` (3 of 12 candidate
+  lines). Runs need `ORCHID_MUTATION_BUILD_TIMEOUT_MS=180000` for this header, and stall while
+  another session's `orchid-test-run` freezes the build slice. APPROVED. All five plans are done.
 
 ## Dependency notes
 
