@@ -7,10 +7,12 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QImageReader>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
 #include <QPushButton>
+#include <QStandardPaths>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -19,6 +21,7 @@
 #include "core/file_sys/nup_writer.h"
 #include "core/loader/loader.h"
 #include "frontend_common/play_time_manager.h"
+#include "qt_common/abstract/frontend.h"
 #include "qt_common/config/uisettings.h"
 #include "qt_common/qt_common.h"
 #include "qt_common/util/game.h"
@@ -76,13 +79,54 @@ GameDetails::GameDetails(GameList* game_list_, QMainWindow* main_window, Core::S
     auto* top_row = new QHBoxLayout;
     auto* back = Button(tr("← Library"), "surface", header);
     connect(back, &QPushButton::clicked, this, &GameDetails::Back);
-    auto* hero_art = Button(tr("Hero Art..."), "surface", header);
-    hero_art->setToolTip(tr("Choose wide artwork for this game from SteamGridDB"));
-    connect(hero_art, &QPushButton::clicked, this, [this] {
-        if (HeroArtDialog(game.program_id, game.title, this).exec() == QDialog::Accepted) {
-            header->SetWide(HeroArt::Load(game.program_id));
-            emit ArtChanged();
+    // Hero art: an image file of the user's first, the SteamGridDB browser second
+    auto* hero_art = Button(tr("Hero Art ▾"), "surface", header);
+    auto* art_menu = new QMenu(hero_art);
+    QAction* import_art = art_menu->addAction(tr("Import Image..."));
+    QAction* browse_art = art_menu->addAction(tr("Browse SteamGridDB..."));
+    art_menu->addSeparator();
+    QAction* remove_art = art_menu->addAction(tr("Remove Hero Art"));
+    hero_art->setMenu(art_menu);
+
+    const auto art_changed = [this] {
+        header->SetWide(HeroArt::Load(game.program_id));
+        emit ArtChanged();
+    };
+    connect(art_menu, &QMenu::aboutToShow, this, [this, remove_art] {
+        remove_art->setEnabled(!HeroArt::Load(game.program_id).isNull());
+    });
+    connect(import_art, &QAction::triggered, this, [this, art_changed] {
+        QStringList patterns;
+        for (const QByteArray& format : QImageReader::supportedImageFormats()) {
+            patterns << QStringLiteral("*.") + QString::fromLatin1(format);
         }
+        const QString path = QtCommon::Frontend::GetOpenFileName(
+            tr("Import Hero Art"),
+            QStandardPaths::writableLocation(QStandardPaths::DownloadLocation),
+            tr("Images (%1)").arg(patterns.join(QLatin1Char(' '))));
+        if (path.isEmpty()) {
+            return;
+        }
+        // Far above any artwork; keeps a wrongly picked file from being read into memory.
+        constexpr qint64 max_size = 64 * 1024 * 1024;
+        QFile file(path);
+        if (file.size() <= max_size && file.open(QIODevice::ReadOnly) &&
+            HeroArt::Save(game.program_id, file.readAll())) {
+            art_changed();
+        } else {
+            QtCommon::Frontend::Warning(tr("Import Hero Art"),
+                                        tr("%1 is not an image Orchid can read.")
+                                            .arg(QFileInfo(path).fileName()));
+        }
+    });
+    connect(browse_art, &QAction::triggered, this, [this, art_changed] {
+        if (HeroArtDialog(game.program_id, game.title, this).exec() == QDialog::Accepted) {
+            art_changed();
+        }
+    });
+    connect(remove_art, &QAction::triggered, this, [this, art_changed] {
+        HeroArt::Remove(game.program_id);
+        art_changed();
     });
     top_row->addWidget(back);
     top_row->addStretch();

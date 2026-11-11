@@ -229,7 +229,8 @@ QPushButton[modern="link"]:hover, QPushButton[modern="mutedLink"]:hover {
     color: @text@;
 }
 
-QPushButton[modern="link"]::menu-indicator, QPushButton[modern="mutedLink"]::menu-indicator {
+QPushButton[modern="link"]::menu-indicator, QPushButton[modern="mutedLink"]::menu-indicator,
+QPushButton[modern="surface"]::menu-indicator {
     image: none;
     width: 0;
 }
