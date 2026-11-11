@@ -419,3 +419,47 @@ TEST_CASE("RomFS factory serves loose sibling programs by program index", "[loos
     CHECK(addon_files->GetFile("addon.bin"));
     FileSys::SetBootContent({});
 }
+
+TEST_CASE("Loose wrapped program1 keeps its own update RomFS tier", "[loose_directory]") {
+    LooseTestDirectory t;
+    const auto game = t.root / "Game";
+    LooseTestDirectory::ExeFS(game / "base/exefs", "base");
+    LooseTestDirectory::Put(game / "base/romfs/base.bin", "base");
+
+    FileSys::RealVfsFilesystem vfs;
+    const auto compose = [&vfs](const fs::path& exefs) {
+        Loader::AppLoader_DeconstructedRomDirectory loader{
+            vfs.OpenDirectory(exefs.string(), FileSys::OpenMode::Read)};
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        const auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
+        return tree;
+    };
+
+    for (const auto name : {"updates", "upgrade"}) {
+        DYNAMIC_SECTION(name << "/<version>/program/program1") {
+            const auto version = game / name / "65536";
+            // The native main differs in size from the legacy main of the same version.
+            LooseTestDirectory::ExeFS(version / "exefs", "legacy");
+            LooseTestDirectory::Put(version / "romfs/update.bin", "update");
+            const auto program1 = version / "program/program1";
+            LooseTestDirectory::ExeFS(program1 / "exefs", "native edition");
+            LooseTestDirectory::Put(program1 / "romfs/Empty", "");
+
+            const auto tree = compose(program1 / "exefs");
+            CHECK(tree->GetFile("update.bin"));
+            CHECK(tree->GetFile("base.bin"));
+        }
+    }
+    SECTION("a program outside the version folder still skips a different build") {
+        LooseTestDirectory::ExeFS(game / "updates/65536/exefs", "legacy");
+        LooseTestDirectory::Put(game / "updates/65536/romfs/update.bin", "update");
+        LooseTestDirectory::ExeFS(game / "program/1/exefs", "native edition");
+        LooseTestDirectory::Put(game / "program/1/romfs/Empty", "");
+
+        const auto tree = compose(game / "program/1/exefs");
+        CHECK_FALSE(tree->GetFile("update.bin"));
+        CHECK(tree->GetFile("base.bin"));
+    }
+}

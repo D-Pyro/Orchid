@@ -256,7 +256,11 @@ FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
                 // A program kept inside this version folder (updates/<version>/program1) is
                 // the native edition built on top of that update's data, so its RomFS tier
                 // always belongs; the size check only guards a program from elsewhere.
-                const auto program_dir = parent->GetParentDirectory();
+                // The wrapped layout updates/<version>/program/program1 has one more level.
+                auto program_dir = parent->GetParentDirectory();
+                if (program_dir != nullptr && equals_ignore_case(program_dir->GetName(), "program")) {
+                    program_dir = program_dir->GetParentDirectory();
+                }
                 const bool own_version =
                     program_dir != nullptr && version_dir != nullptr &&
                     program_dir->GetFullPath() == version_dir->GetFullPath();
