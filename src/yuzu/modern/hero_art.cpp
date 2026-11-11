@@ -98,7 +98,7 @@ bool Save(u64 program_id, const QByteArray& image_data) {
         return false;
     }
     QSaveFile file(dir.filePath(BaseName(program_id) + QLatin1Char('.') +
-                                QString::fromLatin1(format == "jpeg" ? "jpg" : format)));
+                                QString::fromLatin1(format == "jpeg" ? QByteArray("jpg") : format)));
     return file.open(QIODevice::WriteOnly) && file.write(image_data) == image_data.size() &&
            file.commit();
 }
