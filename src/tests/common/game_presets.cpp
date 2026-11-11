@@ -364,12 +364,14 @@ TEST_CASE("New native profiles do not invent clock, fence, frame-cap or presenta
 TEST_CASE("Supported native Wonder does not require an unsupported-game warning", "[game_presets]") {
     CHECK(Settings::IsSupportedGame(Settings::WonderSwitch2ProgramId));
     CHECK(Settings::IsSupportedGame(Settings::SuperMarioBrosWonderProgramId));
-    CHECK(Settings::IsSupportedGame(0x01002B00111A2000ULL));
     // README target games without a preset, checked by literal ID against the list.
     for (const u64 id : {0x04004D300C5AE001ULL, 0x040004F027560000ULL, 0x0100FF500E34A000ULL,
                          0x0400FF500E34A001ULL, 0x0100E95004038000ULL, 0x0400E95004038001ULL,
-                         0x0100453019AA8000ULL, 0x0400453019AA8001ULL, 0x010074F013262000ULL}) {
+                         0x0100453019AA8000ULL, 0x0400453019AA8001ULL}) {
         CHECK(Settings::IsSupportedGame(id));
     }
+    // Out of scope: no Switch 2 improvement (Age of Calamity, Xenoblade Chronicles 3).
+    CHECK_FALSE(Settings::IsSupportedGame(0x01002B00111A2000ULL));
+    CHECK_FALSE(Settings::IsSupportedGame(0x010074F013262000ULL));
     CHECK_FALSE(Settings::IsSupportedGame(0x0100000000001234ULL));
 }

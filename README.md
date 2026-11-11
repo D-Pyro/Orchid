@@ -39,7 +39,7 @@ Mario Tennis Fever first, plus the shader, kernel and graphics work other games 
 Orchid's support and development focus is on demonstrably improving these games:
 
 - Mario Tennis Fever
-- Both Hyrule Warriors games
+- Hyrule Warriors: Age of Imprisonment
 - Pokémon Pokopia
 - Star Fox
 - Super Mario Bros. Wonder
@@ -47,8 +47,8 @@ Orchid's support and development focus is on demonstrably improving these games:
 - Donkey Kong Bananza
 - Kirby Air Riders
 - Kirby and the Forgotten Land
-- Xenoblade Chronicles series: Definitive Edition, 2, X: Definitive Edition and 3 (Switch 1 and
-  Switch 2 Editions)
+- Xenoblade Chronicles: Definitive Edition, 2 and X: Definitive Edition (Switch 1 and Switch 2
+  Editions)
 - Orbitals
 
 These are the project's target games; inclusion here does not mean a game is already fully

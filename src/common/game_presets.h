@@ -138,7 +138,6 @@ inline const GamePreset* FindGamePreset(u64 program_id) {
 
 /// Target games without a graphics preset. Switch 2 Editions use the 0400 prefix and end in 1.
 inline constexpr u64 SupportedGamesWithoutPreset[] = {
-    0x01002B00111A2000ULL, // Hyrule Warriors: Age of Calamity
     WonderSwitch2ProgramId,
     0x04004D300C5AE001ULL, // Kirby and the Forgotten Land + Star-Crossed Worlds (Switch 2)
     0x040004F027560000ULL, // Orbitals
@@ -148,7 +147,6 @@ inline constexpr u64 SupportedGamesWithoutPreset[] = {
     0x0400E95004038001ULL, // Xenoblade Chronicles 2 (Switch 2 Edition)
     0x0100453019AA8000ULL, // Xenoblade Chronicles X: Definitive Edition
     0x0400453019AA8001ULL, // Xenoblade Chronicles X: Definitive Edition (Switch 2 Edition)
-    0x010074F013262000ULL, // Xenoblade Chronicles 3
 };
 
 /// Support follows the README project scope, independently of available graphics presets.

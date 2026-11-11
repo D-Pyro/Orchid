@@ -33,7 +33,6 @@ the next game. No title is verified at 60 FPS by this initial campaign entry.
 | Game | Current campaign state | Next action / blocker |
 | --- | --- | --- |
 | Hyrule Warriors: Age of Imprisonment | Measured stationary gameplay at 2x; graphics gate blocked by native shader rejection | Backlog: reproduce rejected fragment shader at instruction 0xf0, validate full shader and scene, then independent baseline boots |
-| Other Hyrule Warriors title | Unavailable: user confirms only Imprisonment is owned/installed so far | Keep second title in availability backlog; no repeated request for its path |
 | Mario Tennis Fever | Main menu, tutorial and a regular singles match reached/measured | Repeat deterministic opponent/route; inspect text rendering and heavy fever/doubles scenes |
 | Pokémon Pokopia | First cave gameplay measured; broader validation pending | Verify saved-state reload, then measure outside/heavy scenes and investigate startup service assertion |
 | Star Fox | Flight tutorial reached; repeated control customization modal interrupts measurement | Reproduce modal loop and finish tutorial; no device loss reproduced in this run |
@@ -317,6 +316,9 @@ scene components alone do not prove all textures or fallback results correct.
 2026-11-07: user confirms only Hyrule Warriors: Age of Imprisonment is currently
 available (“Hab nur imprisonment bisher”). The other README Hyrule title stays
 in the availability backlog; do not keep asking for a nonexistent local package.
+
+2026-11-11: Hyrule Warriors: Age of Calamity and Xenoblade Chronicles 3 left the README project
+scope; neither has a Switch 2 improvement.
 
 ## Bananza frames-ahead attempt ended
 
