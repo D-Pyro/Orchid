@@ -657,9 +657,12 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
     };
     const auto upscale_pair = [](const std::optional<Texture::TICEntry>& from,
                                  const std::optional<Texture::TICEntry>& to) {
-        return from && to && from->format == to->format && from->Address() != 0 &&
-               to->Address() != 0 && to->Width() > from->Width() && from->IsBlockLinear() &&
-               to->IsBlockLinear();
+        // Kirby and the Forgotten Land: for a few frames around a scene change two compressed
+        // textures of one format sat in earlier slots (BC7 256x256 and 512x256, BC4 32x32 and
+        // 1394x90), were taken for the pair and left those frames without an upscaled image.
+        return from && to && from->format == to->format && IsNativeUpscaleFormat(from->format) &&
+               from->Address() != 0 && to->Address() != 0 && to->Width() > from->Width() &&
+               from->IsBlockLinear() && to->IsBlockLinear();
     };
     const auto converting_pair = [](const std::optional<Texture::TICEntry>& from,
                                     const std::optional<Texture::TICEntry>& to) {

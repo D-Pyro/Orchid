@@ -96,3 +96,16 @@ TEST_CASE("Native upscale rejects incompatible or invalid region parameters", "[
             malformed, {128, 1, 1}, {40, 23, 1}, {960, 540}, {3840, 2160}));
     }
 }
+
+TEST_CASE("Native upscale accepts only the formats it can copy", "[nx2_video]") {
+    using Tegra::Engines::IsNativeUpscaleFormat;
+    using Tegra::Texture::TextureFormat;
+    CHECK(IsNativeUpscaleFormat(TextureFormat::A2B10G10R10));
+    CHECK(IsNativeUpscaleFormat(TextureFormat::A8B8G8R8));
+    CHECK(IsNativeUpscaleFormat(TextureFormat::B10G11R11));
+    CHECK(IsNativeUpscaleFormat(TextureFormat::R16G16B16A16));
+    // Kirby and the Forgotten Land had these two in its constants around scene changes.
+    CHECK_FALSE(IsNativeUpscaleFormat(TextureFormat::BC7U));
+    CHECK_FALSE(IsNativeUpscaleFormat(TextureFormat::DXN1));
+    CHECK_FALSE(IsNativeUpscaleFormat(TextureFormat::R16G16));
+}

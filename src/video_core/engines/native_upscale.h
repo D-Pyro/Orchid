@@ -8,6 +8,7 @@
 #include <optional>
 #include <span>
 #include "common/common_types.h"
+#include "video_core/textures/texture.h"
 
 namespace Tegra::Engines {
 
@@ -16,6 +17,15 @@ struct NativeUpscaleRegions {
     std::array<u32, 4> source;
     std::array<u32, 4> destination;
 };
+
+// The formats the upscale stand-in can copy between (KeplerCompute::UpscaleInsteadOfNativeProgram
+// maps exactly these to render target formats). An image of any other format in a program's
+// constants, such as a compressed texture, is not its input or output.
+constexpr bool IsNativeUpscaleFormat(Texture::TextureFormat format) {
+    using Texture::TextureFormat;
+    return format == TextureFormat::A2B10G10R10 || format == TextureFormat::A8B8G8R8 ||
+           format == TextureFormat::B10G11R11 || format == TextureFormat::R16G16B16A16;
+}
 
 // The compact DLSS parameter layout of one-dimensional thread blocks has a dispatch header,
 // followed by inclusive source/destination rectangles at 0x10/0x20. Words 1-3 repeat the grid;
