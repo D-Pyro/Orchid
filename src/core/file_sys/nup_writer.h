@@ -76,7 +76,9 @@ bool HasResumableJournal(const std::filesystem::path& archive);
 // Writes every package of a NUP back to the folder layout PackDump reads: base/ (or
 // program/<index>/ for each program when the archive holds several), updates/<version>/ and
 // dlc/<titleid>/<version>/. Each file is checked against its stored SHA-256. `output` must be
-// missing or empty; a failed or cancelled run removes what it wrote.
+// missing or empty; a failed or cancelled run removes what it wrote. Each package folder also
+// gets a .nupmeta file with the package's stored metadata (name, icon, control data, display
+// version), which PackDump reads back, so that packing the folder again loses none of it.
 PackResult ExtractNup(const std::filesystem::path& archive, const std::filesystem::path& output,
                       const std::function<void(const PackProgress&)>& progress = {},
                       const std::atomic_bool* cancel = nullptr, std::string* error_out = nullptr);

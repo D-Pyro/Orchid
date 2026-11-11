@@ -71,6 +71,9 @@ constexpr u16 TlvDisplayVersion = 0x0004;
 constexpr u16 TlvTitleName = 0x0005;
 constexpr u16 TlvPublisher = 0x0006;
 constexpr u16 TlvSourceDump = 0x0008;
+// ExtractNup leaves each package's metadata block in this file at the package's root, because the
+// name, icon, control data and display version of an archive are not files of the dump.
+constexpr std::string_view MetaSidecar = ".nupmeta";
 
 constexpr int JournalVersion = 1;
 constexpr u64 ProgressStep = 64ULL * 1024 * 1024;
@@ -477,7 +480,7 @@ Layout BuildLayout(const Plan& plan) {
             const auto id = static_cast<u32>(child);
             if (layout.dirs[id].name == "exefs" && file_counts[id] > 0) {
                 package.exefs_dir = id;
-            } else if (layout.dirs[id].name == "romfs" && file_counts[id] > 0) {
+            } else if (layout.dirs[id].name == "romfs") {
                 package.romfs_dir = id;
             }
         }
@@ -515,6 +518,26 @@ std::vector<u8> SerializeTlvs(std::vector<std::pair<u16, std::vector<u8>>> recor
         PutBytes(out, at + 8, payload);
     }
     return out;
+}
+
+// The block comes from an archive or from a .nupmeta file in a dump, so the sizes are checked.
+std::vector<std::pair<u16, std::vector<u8>>> ParseTlvs(std::span<const u8> block) {
+    std::vector<std::pair<u16, std::vector<u8>>> tlvs;
+    size_t pos = 0;
+    while (pos + 8 <= block.size()) {
+        const auto type = static_cast<u16>(block[pos] | block[pos + 1] << 8);
+        size_t size = 0;
+        for (size_t i = 0; i < 4; ++i) {
+            size |= static_cast<size_t>(block[pos + 4 + i]) << (8 * i);
+        }
+        pos += 8;
+        if (size > block.size() - pos) {
+            throw PackError(PackResult::InvalidSource, "damaged metadata block");
+        }
+        tlvs.emplace_back(type, std::vector<u8>(block.begin() + pos, block.begin() + pos + size));
+        pos += size;
+    }
+    return tlvs;
 }
 
 std::vector<u8> StringBytes(const std::string& value) {
@@ -694,6 +717,7 @@ private:
         const auto index = static_cast<u32>(plan.packages.size());
         PlanPackage package{kind, flags, fallback_id, version, {}};
         auto& tlvs = package_tlvs.emplace_back();
+        package_dirs.push_back(dir);
 
         const auto exefs = FindDirectory(dir, "exefs");
         const auto romfs = FindDirectory(dir, "romfs");
@@ -724,14 +748,16 @@ private:
         if (!exefs.empty() && DirHasFiles(exefs)) {
             CollectTree(index, exefs, "exefs");
         }
-        if (!romfs.empty() && DirHasFiles(romfs)) {
+        // An empty romfs folder is kept: a Switch 2 Edition whose data lives in its add-ons
+        // still opens its own (empty) RomFS and panics when there is none.
+        if (!romfs.empty()) {
             CollectTree(index, romfs, "romfs");
         }
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(dir, ec)) {
             const auto name = ToUtf8(entry.path().filename());
             const auto lower = Lower(name);
-            if (entry.path() == exefs || entry.path() == romfs ||
+            if (entry.path() == exefs || entry.path() == romfs || lower == MetaSidecar ||
                 std::ranges::find(skip, lower) != skip.end()) {
                 continue;
             }
@@ -778,6 +804,27 @@ private:
                 !icon.empty()) {
                 have_icon = true;
                 tlvs.emplace_back(TlvIcon, std::move(icon));
+            }
+        }
+
+        // What ExtractNup stored: the name, icon and display version win over the dump's own,
+        // as the overrides below do (they may have been edited in the archive); anything else
+        // only fills what the dump does not supply.
+        for (size_t i = 0; i < package_dirs.size(); ++i) {
+            const auto sidecar = package_dirs[i] / MetaSidecar;
+            if (!IsFile(sidecar)) {
+                continue;
+            }
+            for (auto& [type, payload] : ParseTlvs(ReadWholeFile(sidecar))) {
+                const bool stored_wins =
+                    type == TlvTitleName || type == TlvIcon || type == TlvDisplayVersion;
+                const bool supplied =
+                    std::ranges::find(package_tlvs[i], type,
+                                      &std::pair<u16, std::vector<u8>>::first) !=
+                    package_tlvs[i].end();
+                if (type != TlvSourceDump && (stored_wins || !supplied)) {
+                    SetTlv(package_tlvs[i], type, std::move(payload));
+                }
             }
         }
 
@@ -850,6 +897,7 @@ private:
     RealVfsFilesystem vfs;
     Plan plan;
     std::vector<std::vector<std::pair<u16, std::vector<u8>>>> package_tlvs;
+    std::vector<fs::path> package_dirs;
     std::vector<std::pair<u32, std::unique_ptr<Loader::AppLoader_DeconstructedRomDirectory>>>
         loaders;
 };
@@ -1741,6 +1789,14 @@ public:
                 }
                 return true;
             });
+            const auto meta = file->ReadBytes(packages[i].meta_size,
+                                              static_cast<size_t>(packages[i].meta_offset));
+            const auto sidecar = root / MetaSidecar;
+            if (!meta.empty() && !fs::exists(sidecar, ec) &&
+                Common::FS::IOFile{sidecar, Common::FS::FileAccessMode::Write}.WriteSpan(
+                    std::span<const u8>{meta}) != meta.size()) {
+                throw PackError(PackResult::IoError, "cannot write " + ToUtf8(sidecar));
+            }
         }
     }
 
@@ -1818,20 +1874,6 @@ private:
     PackProgress progress{};
     Cleanup remove_on_failure = Nothing;
 };
-
-std::vector<std::pair<u16, std::vector<u8>>> ParseTlvs(std::span<const u8> block) {
-    std::vector<std::pair<u16, std::vector<u8>>> tlvs;
-    size_t pos = 0;
-    // NupContainer::ParseMeta already checked the sizes against the block.
-    while (pos + 8 <= block.size()) {
-        const auto type = static_cast<u16>(GetLE(block, pos, 2));
-        const auto size = static_cast<size_t>(GetLE(block, pos + 4, 4));
-        pos += 8;
-        tlvs.emplace_back(type, std::vector<u8>(block.begin() + pos, block.begin() + pos + size));
-        pos += size;
-    }
-    return tlvs;
-}
 
 // Clones the file's extents instead of copying its data where the filesystem allows it (btrfs,
 // XFS), which makes rewriting a large archive instant.

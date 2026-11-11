@@ -122,7 +122,8 @@ std::vector<RawFile> RawFiles(const std::string& nup) {
 std::map<std::string, std::string> SourceTree(const fs::path& dir) {
     std::map<std::string, std::string> out;
     for (const auto& entry : fs::recursive_directory_iterator(dir)) {
-        if (entry.is_regular_file() && entry.path().filename() != ".listing") {
+        if (entry.is_regular_file() && entry.path().filename() != ".listing" &&
+            entry.path().filename() != ".nupmeta") {
             out[fs::relative(entry.path(), dir).generic_string()] = ReadAll(entry.path());
         }
     }
@@ -1082,6 +1083,78 @@ TEST_CASE("NUP extracts a multi-program archive into program folders and repacks
         REQUIRE(PackedTree(second.GetExeFSDir(i)) == PackedTree(first.GetExeFSDir(i)));
         REQUIRE(PackedTree(second.GetRomFSDir(i)) == PackedTree(first.GetRomFSDir(i)));
     }
+    REQUIRE(ReadAll(repacked) == ReadAll(archive));
+}
+
+TEST_CASE("NUP repacking an extracted archive keeps its metadata", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    FileSys::Nup::PackOptions options;
+    options.metadata.title_name = "Renamed";
+    options.metadata.icon = {0xFF, 0xD8, 0xFF, 0xD9};
+    options.metadata.display_version = "9.9.9";
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive, options) == FileSys::Nup::PackResult::Success);
+    const auto output = t.path / "out" / "Game";
+    REQUIRE(FileSys::Nup::ExtractNup(archive, output) == FileSys::Nup::PackResult::Success);
+    REQUIRE(fs::is_regular_file(output / "base/.nupmeta"));
+
+    // The name, icon and version are not files of the dump; they come back from .nupmeta.
+    const auto repacked = t.path / "out" / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(output, repacked) == FileSys::Nup::PackResult::Success);
+    REQUIRE(ReadAll(repacked) == ReadAll(archive));
+
+    // An explicit override still wins, and what the dump supplies itself is not replaced.
+    Put(output / "base/exefs/main.npdm", Npdm(TitleId) + "changed");
+    FileSys::Nup::PackOptions again;
+    again.metadata.title_name = "Again";
+    const auto third = t.path / "Third.nup";
+    REQUIRE(FileSys::Nup::PackDump(output, third, again) == FileSys::Nup::PackResult::Success);
+    const auto metadata = FileSys::Nup::ReadNupMetadata(third);
+    REQUIRE(metadata);
+    REQUIRE(metadata->title_name == "Again");
+    REQUIRE(metadata->icon == options.metadata.icon);
+    REQUIRE(metadata->display_version == "9.9.9");
+    FileSys::RealVfsFilesystem real;
+    NupContainer nup{real.OpenFile(third.string(), FileSys::OpenMode::Read)};
+    REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+    const auto& npdm = nup.GetPackages()[*nup.FindBasePackage()].npdm;
+    REQUIRE(std::string(npdm.begin(), npdm.end()) == Npdm(TitleId) + "changed");
+    for (std::size_t i = 0; i < nup.GetPackages().size(); ++i) {
+        REQUIRE(nup.GetPackages()[i].source_dump == "Game");
+    }
+    REQUIRE(ReadAll(third).find(".nupmeta") == std::string::npos);
+
+    // A .nupmeta whose record runs past the end of the file is refused.
+    Put(output / "base/.nupmeta", std::string("\x05\x00\x00\x00\x09\x00\x00\x00short", 13));
+    REQUIRE(FileSys::Nup::PackDump(output, t.path / "Bad.nup") ==
+            FileSys::Nup::PackResult::InvalidSource);
+}
+
+TEST_CASE("NUP keeps an empty RomFS folder of a program whose data is in its add-ons", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    Put(root / "base/exefs/main", "edition main");
+    Put(root / "base/exefs/main.npdm", Npdm(TitleId));
+    fs::create_directories(root / "base/romfs");
+    Put(root / "dlc/0400ABCD00011001/0/romfs/data.bin", "game data");
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    FileSys::RealVfsFilesystem real;
+    {
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        REQUIRE(nup.GetRomFSDir(*nup.FindBasePackage()) != nullptr);
+    }
+    Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    FileSys::VirtualFile romfs;
+    REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+    const auto output = t.path / "out" / "Game";
+    REQUIRE(FileSys::Nup::ExtractNup(archive, output) == FileSys::Nup::PackResult::Success);
+    REQUIRE(fs::is_directory(output / "base/romfs"));
+    const auto repacked = t.path / "out" / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(output, repacked) == FileSys::Nup::PackResult::Success);
     REQUIRE(ReadAll(repacked) == ReadAll(archive));
 }
 
