@@ -173,6 +173,32 @@ TEST_CASE("Loose edition discovery chooses one program in shallow and deep scans
     }
 }
 
+TEST_CASE("Loose consolidated program1 discovery chooses the native program in shallow and deep scans",
+          "[loose_directory]") {
+    LooseTestDirectory t;
+    const auto game = t.root / "Game";
+    const auto program1 = game / "updates/65536/program1";
+    const auto native_main = program1 / "exefs/main";
+    LooseTestDirectory::ExeFS(game / "base/exefs", "legacy base");
+    LooseTestDirectory::ExeFS(program1 / "exefs", "native edition");
+
+    const auto scan = [](const fs::path& root, bool deep) {
+        return GameListDiscovery::Discover(root, deep,
+                                           [](const fs::path& file) {
+                                               return file.filename() == "main";
+                                           },
+                                           [] { return false; });
+    };
+
+    for (const bool deep : {false, true}) {
+        for (const auto& root : {t.root, game}) {
+            const auto result = scan(root, deep);
+            REQUIRE(result.files.size() == 1);
+            CHECK(result.files.front() == native_main);
+        }
+    }
+}
+
 TEST_CASE("Loose nested updates select the newest complete program and preserve the game root",
           "[loose_directory]") {
     LooseTestDirectory t;

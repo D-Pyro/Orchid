@@ -37,12 +37,26 @@ inline bool IsUpgradeProgramMain(const std::filesystem::path& main) {
         return name == expected;
     };
     const auto package = main.parent_path().parent_path();
-    if (!equals(main, u8"main") || !equals(main.parent_path(), u8"exefs") ||
-        !(equals(package, u8"0") || equals(package, u8"1")) ||
-        !equals(package.parent_path(), u8"program")) {
+    if (!equals(main, u8"main") || !equals(main.parent_path(), u8"exefs")) {
         return false;
     }
-    const auto storage = package.parent_path().parent_path();
+
+    // Numbered edition programs are stored in program/<index>; consolidated Switch 2
+    // packages may instead be program1 itself, either next to that wrapper or directly
+    // under updates/<version>.
+    std::filesystem::path storage;
+    if (equals(package, u8"0") || equals(package, u8"1")) {
+        if (!equals(package.parent_path(), u8"program")) {
+            return false;
+        }
+        storage = package.parent_path().parent_path();
+    } else if (equals(package, u8"program1")) {
+        storage = equals(package.parent_path(), u8"program") ? package.parent_path().parent_path()
+                                                              : package.parent_path();
+    } else {
+        return false;
+    }
+
     if (equals(storage, u8"base") || equals(storage.parent_path(), u8"upgrade")) {
         return true;
     }
