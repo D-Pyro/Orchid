@@ -828,6 +828,8 @@ bool PatchManager::AppendEmbeddedPatches(std::vector<Patch>& out,
                 })) {
                 dlc_match.push_back({.title_id = patch.title_id, .type = ContentRecordType::Data});
             }
+        } else if (patch.type == PatchType::Edition) {
+            out.push_back(patch);
         }
     }
 
@@ -1193,7 +1195,7 @@ std::vector<Patch> PatchManager::GetPatches(VirtualFile update_raw,
         if (has_embedded_dlc) {
             dlc_source = PatchSource::Embedded;
         }
-        out.push_back({.enabled = has_embedded_dlc || !dlc_disabled,
+        out.push_back({.enabled = !dlc_disabled,
                        .name = "DLC",
                        .version = std::move(list),
                        .type = PatchType::DLC,

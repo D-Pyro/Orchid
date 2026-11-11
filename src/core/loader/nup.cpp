@@ -113,7 +113,7 @@ AppLoader_NUP::AppLoader_NUP(FileSys::VirtualFile file_)
     }
 
     const auto base_index = nup->FindBasePackage();
-    const auto update_index = nup->FindBestUpdatePackage();
+    update_index = nup->FindEnabledUpdatePackage();
 
     // The program comes from the base package; a standalone update container
     // (SPEC §4.1.2) carries a complete patched tree and boots on its own.
@@ -204,8 +204,10 @@ AppLoader::LoadResult AppLoader_NUP::Load(Kernel::KProcess& process, Core::Syste
                                          ? FileSys::GetBaseTitleID(nacp_file->GetDLCBaseTitleId())
                                          : base_title_id;
     std::vector<FileSys::BootContent> boot_content;
-    for (auto& [id, romfs] : nup->GetAddonRomFS(addon_application_id)) {
-        boot_content.push_back({id, FileSys::ContentRecordType::Data, std::move(romfs)});
+    if (!FileSys::IsAddonDisabled(base_title_id, "DLC")) {
+        for (auto& [id, romfs] : nup->GetAddonRomFS(addon_application_id)) {
+            boot_content.push_back({id, FileSys::ContentRecordType::Data, std::move(romfs)});
+        }
     }
     for (auto& [id, romfs] : nup->GetSiblingProgramRomFS()) {
         boot_content.push_back({id, FileSys::ContentRecordType::Program, std::move(romfs)});
@@ -235,10 +237,26 @@ std::vector<FileSys::Patch> AppLoader_NUP::ReadEmbeddedPatches() const {
         return patches;
     }
     const auto& packages = nup->GetPackages();
-    if (const auto update = nup->FindBestUpdatePackage()) {
-        const auto& package = packages[*update];
-        patches.push_back({.enabled = true,
-                           .name = "Update",
+    const auto base_index = nup->FindBasePackage();
+    const bool nx_base = base_index && (packages[*base_index].title_id >> 56) == 0x01;
+
+    // Every update is listed, newest first, so the Add-Ons tab can pick an older one or none.
+    std::vector<std::size_t> updates;
+    for (std::size_t i = 0; i < packages.size(); ++i) {
+        if (packages[i].kind == NupContainer::PackageKind::Update) {
+            updates.push_back(i);
+        }
+    }
+    std::ranges::sort(updates, [&](std::size_t a, std::size_t b) {
+        return packages[a].version > packages[b].version;
+    });
+    for (const auto index : updates) {
+        const auto& package = packages[index];
+        // A Switch 2 build packed as the update of a Switch 1 base (Super Mario Galaxy 2) is the
+        // game's Switch 2 Edition; switching it off boots the Switch 1 version.
+        const bool edition = nx_base && (package.title_id >> 56) == 0x04;
+        patches.push_back({.enabled = update_index == index,
+                           .name = edition ? "Switch 2 Edition" : "Update",
                            .version = package.display_version.empty()
                                           ? DecodeVersion(package.version)
                                           : package.display_version,
@@ -248,12 +266,25 @@ std::vector<FileSys::Patch> AppLoader_NUP::ReadEmbeddedPatches() const {
                            .source = FileSys::PatchSource::Embedded,
                            .numeric_version = package.version});
     }
+    // A Switch 2 Edition program (0400... ending in its program index): shown only, booting the
+    // Switch 1 program instead is not supported.
+    if (has_program && (base_title_id >> 56) == 0x04 &&
+        FileSys::GetBaseTitleID(base_title_id) != base_title_id) {
+        patches.push_back({.enabled = true,
+                           .name = "Switch 2 Edition",
+                           .version = {},
+                           .type = FileSys::PatchType::Edition,
+                           .program_id = base_title_id,
+                           .title_id = base_title_id,
+                           .source = FileSys::PatchSource::Embedded});
+    }
     const u64 application_id = nacp_file && nacp_file->GetDLCBaseTitleId() != 0
                                    ? FileSys::GetBaseTitleID(nacp_file->GetDLCBaseTitleId())
                                    : base_title_id;
+    const bool dlc_enabled = !FileSys::IsAddonDisabled(base_title_id, "DLC");
     for (const auto index : nup->FindAddonPackages(application_id)) {
         const auto& package = packages[index];
-        patches.push_back({.enabled = true,
+        patches.push_back({.enabled = dlc_enabled,
                            .name = "DLC",
                            .version = fmt::format("{}", package.title_id & 0x7FF),
                            .type = FileSys::PatchType::DLC,
@@ -268,7 +299,6 @@ std::vector<FileSys::Patch> AppLoader_NUP::ReadEmbeddedPatches() const {
 ResultStatus AppLoader_NUP::ReadRomFS(FileSys::VirtualFile& out_file) {
     const auto base_index = nup->FindBasePackage();
     const auto base_romfs = base_index ? nup->GetRomFSDir(*base_index) : FileSys::VirtualDir{};
-    const auto update_index = nup->FindBestUpdatePackage();
     const auto update_romfs =
         update_index ? nup->GetRomFSDir(*update_index) : FileSys::VirtualDir{};
     // A standalone update carries the complete merged tree; a base+update pair

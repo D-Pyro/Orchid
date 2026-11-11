@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -93,6 +94,9 @@ struct NupDecompressCache {
  * Per-package meta TLVs carry NPDM bytes, title names (default + localized),
  * icons and a display version. All integers little-endian.
  */
+/// Whether the per-game Add-Ons tab switched `key` off for `title_id`.
+bool IsAddonDisabled(u64 title_id, std::string_view key);
+
 class NupContainer {
 public:
     static constexpr std::array<u8, 4> HeaderMagic{'N', 'U', 'P', 0x01};
@@ -152,6 +156,10 @@ public:
     std::optional<std::size_t> FindBasePackage() const;
     /// Highest version among Update packages, if any.
     std::optional<std::size_t> FindBestUpdatePackage() const;
+    /// The update that boots: the newest one not switched off in the per-game Add-Ons tab
+    /// ("Update@<version>" under the base's title ID). A standalone update is the program itself
+    /// and cannot be switched off.
+    std::optional<std::size_t> FindEnabledUpdatePackage();
 
     /// Opens a member file by node index; raw extents are zero-copy views into
     /// the container, zstd extents are lazily decompressed, cached in memory

@@ -57,6 +57,8 @@ public:
 private:
     std::unique_ptr<FileSys::NupContainer> nup;
     std::unique_ptr<AppLoader> secondary_loader;
+    /// The update layered over the base: the newest one not switched off in the Add-Ons tab.
+    std::optional<std::size_t> update_index;
 
     std::unique_ptr<FileSys::NACP> nacp_file;
     FileSys::VirtualFile icon_file;

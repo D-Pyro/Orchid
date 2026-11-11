@@ -104,13 +104,15 @@ void ConfigurePerGameAddons::OnItemChanged(QStandardItem* item) {
 }
 
 void ConfigurePerGameAddons::ApplyConfiguration() {
-    std::vector<std::string> disabled_addons = embedded_disabled_keys;
+    std::vector<std::string> disabled_addons;
 
     for (const auto& item : list_items) {
         const auto disabled = item.front()->checkState() == Qt::Unchecked;
         if (disabled) {
             QVariant userData = item.front()->data(Qt::UserRole);
-            if (userData.isValid() && userData.canConvert<quint32>() &&
+            if (const auto key = item.front()->data(ADDON_KEY); key.isValid()) {
+                disabled_addons.push_back(key.toString().toStdString());
+            } else if (userData.isValid() && userData.canConvert<quint32>() &&
                 item.front()->text() == QStringLiteral("Update")) {
                 quint32 numeric_version = userData.toUInt();
                 disabled_addons.push_back(fmt::format("Update@{}", numeric_version));
@@ -309,7 +311,6 @@ void ConfigurePerGameAddons::LoadConfiguration() {
 
     const auto& disabled = Settings::values.disabled_addons[title_id];
 
-    embedded_disabled_keys.clear();
     update_items.clear();
     list_items.clear();
     item_model->removeRows(0, item_model->rowCount());
@@ -324,17 +325,31 @@ void ConfigurePerGameAddons::LoadConfiguration() {
         auto* const first_item = new QStandardItem;
         first_item->setText(name);
         if (patch.source == FileSys::PatchSource::Embedded) {
-            // Informational rows must not rewrite installed-content preferences.
-            for (const auto& key : disabled) {
-                if (key == patch.name || (patch.type == FileSys::PatchType::Update &&
-                                          key == fmt::format("Update@{}", patch.numeric_version))) {
-                    embedded_disabled_keys.push_back(key);
-                }
-            }
             first_item->setText(name + tr(" (embedded)"));
             first_item->setEditable(false);
-            item_model->appendRow(
-                {first_item, new QStandardItem{QString::fromStdString(patch.version)}});
+            if (patch.type == FileSys::PatchType::Edition) {
+                // Informational: says what the NUP contains, nothing to switch off.
+                item_model->appendRow(
+                    {first_item, new QStandardItem{QString::fromStdString(patch.version)}});
+                continue;
+            }
+            // Content inside a NUP: the loader decides what it boots, so its state is the truth.
+            first_item->setCheckable(true);
+            first_item->setData(QString::fromStdString(
+                                    patch.type == FileSys::PatchType::Update
+                                        ? fmt::format("Update@{}", patch.numeric_version)
+                                        : patch.name),
+                                ADDON_KEY);
+            bool should_enable = patch.enabled;
+            if (patch.type == FileSys::PatchType::Update) {
+                should_enable = should_enable && !has_enabled_update;
+                has_enabled_update = has_enabled_update || should_enable;
+                update_items.push_back(first_item);
+            }
+            first_item->setCheckState(should_enable ? Qt::Checked : Qt::Unchecked);
+            list_items.push_back(QList<QStandardItem*>{
+                first_item, new QStandardItem{QString::fromStdString(patch.version)}});
+            item_model->appendRow(list_items.back());
             continue;
         }
         first_item->setCheckable(true);

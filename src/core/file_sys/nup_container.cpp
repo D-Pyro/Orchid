@@ -18,6 +18,7 @@
 
 #include "common/fs/path_util.h"
 #include "common/logging.h"
+#include "common/settings.h"
 #include "common/swap.h"
 #include "core/file_sys/vfs/vfs_offset.h"
 #include "core/file_sys/common_funcs.h"
@@ -775,6 +776,31 @@ std::optional<std::size_t> NupContainer::FindBestUpdatePackage() const {
     std::optional<std::size_t> best;
     for (std::size_t i = 0; i < packages.size(); ++i) {
         if (packages[i].kind != PackageKind::Update) {
+            continue;
+        }
+        if (!best || packages[i].version > packages[*best].version) {
+            best = i;
+        }
+    }
+    return best;
+}
+
+bool IsAddonDisabled(u64 title_id, std::string_view key) {
+    const auto it = Settings::values.disabled_addons.find(title_id);
+    return it != Settings::values.disabled_addons.end() &&
+           std::find(it->second.begin(), it->second.end(), key) != it->second.end();
+}
+
+std::optional<std::size_t> NupContainer::FindEnabledUpdatePackage() {
+    const auto base = FindBasePackage();
+    if (!base || GetExeFSDir(*base) == nullptr) {
+        return FindBestUpdatePackage();
+    }
+    std::optional<std::size_t> best;
+    for (std::size_t i = 0; i < packages.size(); ++i) {
+        if (packages[i].kind != PackageKind::Update ||
+            IsAddonDisabled(packages[*base].title_id,
+                            fmt::format("Update@{}", packages[i].version))) {
             continue;
         }
         if (!best || packages[i].version > packages[*best].version) {

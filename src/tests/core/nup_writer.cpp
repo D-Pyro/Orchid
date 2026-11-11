@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <openssl/evp.h>
 
+#include "common/settings.h"
 #include "core/core.h"
 #include "core/file_sys/control_metadata.h"
 #include "core/file_sys/nup_container.h"
@@ -1307,4 +1308,109 @@ TEST_CASE("NUP metadata edits match packing with the same overrides", "[nup]") {
              result == FileSys::Nup::PackResult::Success));
     REQUIRE_FALSE(fs::exists(archive.string() + ".part"));
     REQUIRE(FileSys::Nup::ReadNupMetadata(archive));
+}
+
+TEST_CASE("NUP updates and DLC can be switched off in the Add-Ons tab", "[nup]") {
+    TempDir t;
+    const auto root = t.path / "Game";
+    MakeDump(root);
+    const auto archive = t.path / "Game.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    FileSys::RealVfsFilesystem real;
+    auto& disabled = Settings::values.disabled_addons[TitleId];
+    const auto saved = disabled;
+    struct Restore {
+        std::vector<std::string>& target;
+        std::vector<std::string> value;
+        ~Restore() {
+            target = value;
+        }
+    } restore{disabled, saved};
+
+    // Booted update, the update row the loader reports as enabled, and its display version.
+    const auto state = [&] {
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        const auto update = nup.FindEnabledUpdatePackage();
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        u32 enabled_update = 0;
+        int update_rows = 0;
+        bool dlc_enabled = false;
+        for (const auto& patch : loader.ReadEmbeddedPatches()) {
+            if (patch.type == FileSys::PatchType::Update) {
+                ++update_rows;
+                if (patch.enabled) {
+                    REQUIRE(enabled_update == 0);
+                    enabled_update = patch.numeric_version;
+                }
+            } else if (patch.type == FileSys::PatchType::DLC) {
+                dlc_enabled = patch.enabled;
+            }
+        }
+        REQUIRE(update_rows == 2);
+        const u32 booted = update ? nup.GetPackages()[*update].version : 0;
+        REQUIRE(booted == enabled_update);
+        return std::pair{booted, dlc_enabled};
+    };
+
+    disabled.clear();
+    REQUIRE(state() == std::pair{131072u, true});
+    disabled = {"Update@131072"};
+    REQUIRE(state() == std::pair{65536u, true});
+    disabled = {"Update@131072", "Update@65536", "DLC"};
+    REQUIRE(state() == std::pair{0u, false});
+
+    // The merged DLC row follows the setting even when all DLC is embedded.
+    Core::System system;
+    FileSys::ContentProviderUnion provider{};
+    FileSys::PatchManager pm{TitleId, system.GetFileSystemController(), provider};
+    Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    const auto patches = pm.GetPatches(nullptr, loader.ReadEmbeddedPatches());
+    const auto dlc = std::find_if(patches.begin(), patches.end(), [](const auto& patch) {
+        return patch.type == FileSys::PatchType::DLC;
+    });
+    REQUIRE(dlc != patches.end());
+    REQUIRE_FALSE(dlc->enabled);
+}
+
+TEST_CASE("NUP reports Switch 2 Editions", "[nup]") {
+    TempDir t;
+    FileSys::RealVfsFilesystem real;
+    const auto editions = [&](const fs::path& archive) {
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        std::vector<std::string> out;
+        for (const auto& patch : loader.ReadEmbeddedPatches()) {
+            if (patch.name == "Switch 2 Edition") {
+                out.push_back(patch.type == FileSys::PatchType::Edition ? "info" : "update");
+            }
+        }
+        return out;
+    };
+
+    // Kirby and Wonder: only the edition program (index 1) is in the archive.
+    const auto program = t.path / "Program";
+    Put(program / "ExeFS/main", "main");
+    Put(program / "ExeFS/main.npdm", Npdm(TitleId + 1));
+    Put(program / "RomFS/file", "rom");
+    REQUIRE(FileSys::Nup::PackDump(program, t.path / "program.nup") ==
+            FileSys::Nup::PackResult::Success);
+    REQUIRE(editions(t.path / "program.nup") == std::vector<std::string>{"info"});
+
+    // Super Mario Galaxy 2: the Switch 2 build is the update of a Switch 1 base.
+    constexpr u64 NxTitleId = 0x0100ABCD00010000ULL;
+    const auto split = t.path / "Split";
+    Put(split / "Base/ExeFS/main", "nx main");
+    Put(split / "Base/ExeFS/main.npdm", Npdm(NxTitleId));
+    Put(split / "Base/RomFS/file", "rom");
+    Put(split / "updates/65536/exefs/main", "ounce main");
+    Put(split / "updates/65536/exefs/main.npdm", Npdm(TitleId));
+    REQUIRE(FileSys::Nup::PackDump(split, t.path / "split.nup") ==
+            FileSys::Nup::PackResult::Success);
+    REQUIRE(editions(t.path / "split.nup") == std::vector<std::string>{"update"});
+
+    // A plain Switch 2 game is neither.
+    const auto plain = t.path / "Plain";
+    MakeDump(plain);
+    REQUIRE(FileSys::Nup::PackDump(plain, t.path / "plain.nup") ==
+            FileSys::Nup::PackResult::Success);
+    REQUIRE(editions(t.path / "plain.nup").empty());
 }

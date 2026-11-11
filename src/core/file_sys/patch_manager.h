@@ -30,7 +30,8 @@ struct ContentProviderEntry;
 class NCA;
 class NACP;
 
-enum class PatchType { Update, DLC, Mod };
+// Edition: informational row for a Switch 2 Edition program, nothing to switch on or off.
+enum class PatchType { Update, DLC, Mod, Edition };
 
 enum class PatchSource {
     Unknown,

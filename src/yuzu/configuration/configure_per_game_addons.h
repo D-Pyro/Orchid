@@ -33,7 +33,8 @@ class ConfigurePerGameAddons : public QWidget {
     Q_OBJECT
 
 public:
-    enum PatchData { NUMERIC_VERSION = Qt::UserRole, PATCH_LOCATION };
+    // ADDON_KEY: the disabled_addons key of a row whose text is not the key (embedded NUP content).
+    enum PatchData { NUMERIC_VERSION = Qt::UserRole, PATCH_LOCATION, ADDON_KEY };
 
     explicit ConfigurePerGameAddons(Core::System& system_, QWidget* parent = nullptr);
     ~ConfigurePerGameAddons() override;
@@ -74,7 +75,6 @@ private:
 
     std::vector<QList<QStandardItem*>> list_items;
     std::vector<QStandardItem*> update_items;
-    std::vector<std::string> embedded_disabled_keys;
 
     Core::System& system;
 };

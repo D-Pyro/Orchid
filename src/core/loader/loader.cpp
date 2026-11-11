@@ -180,7 +180,7 @@ bool IsBootableGameContainer(FileSys::VirtualFile file, FileType type, u64 progr
         // a complete patched tree and boots on its own (SPEC section 4.1.2).
         if (const auto base = nup.FindBasePackage();
             base.has_value() && nup.GetExeFSDir(*base) != nullptr) {
-            const auto update = nup.FindBestUpdatePackage();
+            const auto update = nup.FindEnabledUpdatePackage();
             return has_usable_exefs(update && nup.GetExeFSDir(*update) != nullptr
                                         ? *update
                                         : *base);

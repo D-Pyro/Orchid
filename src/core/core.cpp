@@ -140,7 +140,7 @@ bool IsSwitch2Program(Core::System& system, const FileSys::VirtualFilesystem& vf
         }
         // The ExeFS AppLoader_NUP boots: the update's over the base's, or a standalone update.
         std::optional<std::size_t> program;
-        if (const auto update = nup.FindBestUpdatePackage();
+        if (const auto update = nup.FindEnabledUpdatePackage();
             update && nup.GetExeFSDir(*update) != nullptr) {
             program = update;
         } else if (const auto base = nup.FindBasePackage();
