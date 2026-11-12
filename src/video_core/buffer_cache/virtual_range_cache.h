@@ -27,7 +27,9 @@ using VirtualSegments = boost::container::small_vector<VirtualSegment, 8>;
 
 class VirtualRangeCache {
 public:
-    static constexpr size_t MAX_ENTRIES = 8192;
+    // Bananza's heavy areas bind more than 8192 distinct storage ranges a frame; with that
+    // limit the cache cleared itself about 11 times a second and nearly every query missed.
+    static constexpr size_t MAX_ENTRIES = 65536;
     static constexpr size_t MAX_DEFERRED = 4096;
 
     const VirtualSegments* Query(Tegra::MemoryManager& memory, GPUVAddr gpu_addr, u32 size) {
