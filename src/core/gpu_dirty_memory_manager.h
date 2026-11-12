@@ -99,6 +99,9 @@ public:
             current.load(std::memory_order_acquire).mask == 0) {
             return;
         }
+        // FlushRegion also gathers off the GPU thread (host1x video decode reads); serialize
+        // gatherers so one cannot swap or clear front_buffer while another iterates it.
+        std::scoped_lock gather_lk(gather_guard);
         {
             std::scoped_lock lk(guard);
             // Before the exchange: a Collect that lands in the next list sees the new generation.
@@ -171,6 +174,7 @@ private:
     std::atomic<bool> has_back{}; ///< back_buffer holds entries (set and cleared under guard)
     std::atomic<u64> generation{};
     std::mutex guard;
+    std::mutex gather_guard;
     std::vector<TransformAddress> back_buffer;
     std::vector<TransformAddress> front_buffer;
 };
