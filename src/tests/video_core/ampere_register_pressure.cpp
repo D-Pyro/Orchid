@@ -278,3 +278,16 @@ TEST_CASE("Ampere register shadowing covers SHFL, SUATOM, SUST and TLD4",
     REQUIRE_FALSE(static_cast<bool>(scratch));
     CHECK(scratch.error == "native program uses lowering scratch registers");
 }
+
+TEST_CASE("Ampere register shadowing covers all three coordinates of a 3D SURED",
+          "[video_core][ampere][pressure]") {
+    // SURED.D.OR.3D [R220], R228: x, y, z in R220-R222.
+    constexpr Instruction reduction{{0xdc00759f, 0xa0c002e4, 0x0310e000, 0}};
+    CheckShadowed(reduction, {{24, 3}, {32, 1}});
+    CheckSpan(With(reduction, 32, 1), 24, 3);
+    CheckSpan(With(With(reduction, 32, 1), 61, 3, 3), 24, 2);
+    // R218-R220 crosses a quartet: the third coordinate would read UR4's mirror.
+    const auto crossing = LowerToMaxwell(std::array{UniformMove, With(reduction, 24, 218), Exit});
+    REQUIRE_FALSE(static_cast<bool>(crossing));
+    CHECK(crossing.error == "native register shadowing mode");
+}
