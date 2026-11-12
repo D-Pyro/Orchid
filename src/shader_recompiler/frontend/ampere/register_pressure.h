@@ -59,6 +59,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
     case 0x804:
     case 0x80b:
     case 0x80c:
+    case 0x3c2: // R2UR: bits 16-23 name the uniform register written
         operand(24);
         break;
     case 0x20c:
@@ -71,6 +72,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
     case 0x923:
     case 0x820:
     case 0xa20:
+    case 0xc20:
     case 0x421:
         operand(16);
         operand(24);
@@ -89,13 +91,20 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         break;
     case 0xc17:
     case 0x817:
+    case 0xa17:
         operand(16);
         operand(24);
+        break;
+    case 0x217: // IMNMX register form: B in bits 32-39
+        operand(16);
+        operand(24);
+        operand(32);
         break;
     case 0xa24:
     case 0xc24: // IMAD with a uniform B (0xc24) or uniform C (0xe24, B in bits 64-71)
     case 0xe24:
     case 0xa23:
+    case 0xc23: // FFMA with a uniform B
     case 0x623:
     case 0x423:
         operand(16);
@@ -196,6 +205,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         operand(64);
         break;
     case 0xa11:
+    case 0x811: // LEA: B is the immediate in words[1]
         operand(16);
         operand(24);
         operand(64);

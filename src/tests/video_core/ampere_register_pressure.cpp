@@ -108,3 +108,18 @@ TEST_CASE("Ampere register shadowing covers IMAD with a uniform source",
     CheckShadowed({{0xe0e57c24, 0x0000000a, 0x0f8e02da, 0}}, {{16, 1}, {24, 1}, {64, 1}});
     CheckShadowed({{0xe0e57e24, 0x0000000a, 0x0f8e02da, 0}}, {{16, 1}, {24, 1}, {64, 1}});
 }
+
+TEST_CASE("Ampere register shadowing covers R2UR, uniform FMUL and FFMA, IMNMX and LEA immediate",
+          "[video_core][ampere][pressure]") {
+    // R2UR UR4, R228: bits 16-23 name the uniform register.
+    CheckShadowed({{0xe40473c2, 0, 0x000e0000, 0}}, {{24, 1}});
+    // FMUL R219, R226, UR4.
+    CheckShadowed({{0xe2db7c20, 0x04, 0x08410000, 0}}, {{16, 1}, {24, 1}});
+    // FFMA R229, R224, UR5, R227.
+    CheckShadowed({{0xe0e57c23, 0x05, 0x080100e3, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+    // IMNMX R217, R226, c[0x3][0x10] and IMNMX R217, R226, R220.
+    CheckShadowed({{0xe2d97a17, 0x00c00400, 0x03800000, 0}}, {{16, 1}, {24, 1}});
+    CheckShadowed({{0xe2d97217, 0xdc, 0x03800000, 0}}, {{16, 1}, {24, 1}, {32, 1}});
+    // LEA R217, R226, 0x8000.
+    CheckShadowed({{0xe2d97811, 0x00008000, 0x078e80ff, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+}
