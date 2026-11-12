@@ -133,6 +133,7 @@ add_executable(tests
     video_core/ampere_bindless_surfaces.cpp
     video_core/syncpoint_manager.cpp
     video_core/native_macro_fifo.cpp
+    video_core/turing_macro_ram.cpp
     video_core/uniform_stream_reuse.cpp
     video_core/sparse_uniform_upload.cpp
     video_core/shader_invalidation.cpp
