@@ -139,6 +139,7 @@ add_executable(tests
     video_core/shader_invalidation.cpp
     video_core/descriptor_table.cpp
     video_core/invalidation_accumulator.cpp
+    video_core/maxwell_dma_const_a.cpp
     video_core/usage_tracker.cpp
     input_common/calibration_configuration_job.cpp
 )
