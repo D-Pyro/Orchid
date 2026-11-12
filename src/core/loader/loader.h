@@ -389,6 +389,13 @@ protected:
  * @return the best loader for this file.
  */
 std::unique_ptr<AppLoader> GetLoader(Core::System& system, FileSys::VirtualFile file,
-                                     u64 program_id = 0, std::size_t program_index = 0);
+                                     u64 program_id = 0, std::size_t program_index = 0,
+                                     std::optional<std::size_t> switched_index = std::nullopt);
+
+/**
+ * The program index an ExecuteProgram restart switches to, when it switches. Only such a
+ * restart sets the previous program index; a frontend boot leaves it at -1.
+ */
+std::optional<std::size_t> SwitchedProgramIndex(s32 previous_program_index, s32 program_index);
 
 } // namespace Loader

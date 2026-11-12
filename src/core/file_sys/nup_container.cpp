@@ -4,6 +4,8 @@
 #include "core/file_sys/nup_container.h"
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <cstddef>
 #include <cstring>
 #include <list>
@@ -598,8 +600,72 @@ bool NupContainer::Parse() {
             status = Loader::ResultStatus::ErrorNUPBadFormat;
             return false;
         }
+        if (package.kind == PackageKind::Addon && package.romfs_dir == NoDir) {
+            package.romfs_dir = FindNestedAddonRomFS(package.root_dir);
+        }
     }
     return true;
+}
+
+u32 NupContainer::FindChildDir(u32 dir_index, std::string_view name) const {
+    const DirNode& node = dirs[dir_index];
+    const u64 end = static_cast<u64>(node.first_child) + node.child_count;
+    for (u64 slot = node.first_child; slot < end; ++slot) {
+        const u32 child = children[slot];
+        if (child < dirs.size() && dirs[child].name.size() == name.size() &&
+            std::equal(name.begin(), name.end(), dirs[child].name.begin(), [](char a, char b) {
+                return std::tolower(static_cast<unsigned char>(a)) ==
+                       std::tolower(static_cast<unsigned char>(b));
+            })) {
+            return child;
+        }
+    }
+    return NoDir;
+}
+
+// Extracted add-ons can keep their data as <version>/base/program/0/romfs with patches in
+// <version>/updates/<patch>/program/0/romfs (Switch 2 Edition upgrade packs). Packers that only
+// record a top-level romfs/ leave the pointer unset although the tree is packed (NupStudio).
+// The newest patch holds the full patched RomFS and wins over the base.
+u32 NupContainer::FindNestedAddonRomFS(u32 root_dir) const {
+    const auto program_romfs = [this](u32 package) {
+        if (package == NoDir) {
+            return NoDir;
+        }
+        if (const u32 direct = FindChildDir(package, "romfs"); direct != NoDir) {
+            return direct;
+        }
+        const u32 programs = FindChildDir(package, "program");
+        const u32 zero = programs != NoDir ? FindChildDir(programs, "0") : NoDir;
+        return zero != NoDir ? FindChildDir(zero, "romfs") : NoDir;
+    };
+    if (const u32 updates = FindChildDir(root_dir, "updates"); updates != NoDir) {
+        u32 best = NoDir;
+        u64 best_version = 0;
+        const DirNode& node = dirs[updates];
+        const u64 end = static_cast<u64>(node.first_child) + node.child_count;
+        for (u64 slot = node.first_child; slot < end; ++slot) {
+            const u32 child = children[slot];
+            if (child >= dirs.size()) {
+                continue;
+            }
+            const auto& name = dirs[child].name;
+            u64 version{};
+            const auto parsed = std::from_chars(name.data(), name.data() + name.size(), version);
+            if (name.empty() || parsed.ec != std::errc{} || parsed.ptr != name.data() + name.size()) {
+                continue;
+            }
+            if (const u32 romfs = program_romfs(child);
+                romfs != NoDir && (best == NoDir || version >= best_version)) {
+                best = romfs;
+                best_version = version;
+            }
+        }
+        if (best != NoDir) {
+            return best;
+        }
+    }
+    return program_romfs(FindChildDir(root_dir, "base"));
 }
 
 bool NupContainer::ValidateDirTree() const {
@@ -912,6 +978,34 @@ VirtualDir NupContainer::GetRomFSDir(std::size_t package_index) {
         romfs_dir_cache[package_index] = BuildPackageDir(packages[package_index].romfs_dir);
     }
     return romfs_dir_cache[package_index];
+}
+
+VirtualDir NupContainer::GetEditionRomFSDir(std::size_t package_index) {
+    if (package_index >= packages.size() || packages[package_index].exefs_dir == NoDir) {
+        return nullptr;
+    }
+    const auto& package = packages[package_index];
+    const u32 program1 = FindChildDir(package.root_dir, "program1");
+    if (program1 == NoDir || FindChildDir(program1, "exefs") != package.exefs_dir) {
+        return nullptr;
+    }
+    const u32 romfs = FindChildDir(program1, "romfs");
+    return romfs != NoDir ? BuildPackageDir(romfs) : nullptr;
+}
+
+VirtualDir NupContainer::GetLegacyExeFSDir(std::size_t package_index) {
+    if (package_index >= packages.size() || packages[package_index].exefs_dir == NoDir) {
+        return nullptr;
+    }
+    const auto& package = packages[package_index];
+    const u32 program1 = FindChildDir(package.root_dir, "program1");
+    const u32 legacy = FindChildDir(package.root_dir, "exefs");
+    if (program1 == NoDir || legacy == NoDir || legacy == package.exefs_dir ||
+        FindChildDir(program1, "exefs") != package.exefs_dir) {
+        return nullptr;
+    }
+    auto dir = BuildPackageDir(legacy);
+    return dir->GetFile("main") != nullptr && dir->GetFile("main.npdm") != nullptr ? dir : nullptr;
 }
 
 VirtualDir NupContainer::MergeShadowDirs(const VirtualDir& base, const VirtualDir& overlay) {

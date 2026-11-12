@@ -40,9 +40,9 @@ namespace {
     }
 }
 
-[[nodiscard]] inline std::unique_ptr<Process> CreateProcessImpl(std::unique_ptr<Loader::AppLoader>& out_loader, Loader::ResultStatus& out_load_result, Core::System& system, FileSys::VirtualFile file, u64 program_id, u64 program_index) {
+[[nodiscard]] inline std::unique_ptr<Process> CreateProcessImpl(std::unique_ptr<Loader::AppLoader>& out_loader, Loader::ResultStatus& out_load_result, Core::System& system, FileSys::VirtualFile file, u64 program_id, u64 program_index, std::optional<std::size_t> switched_index) {
     // Get the appropriate loader to parse this NCA.
-    out_loader = Loader::GetLoader(system, file, program_id, program_index);
+    out_loader = Loader::GetLoader(system, file, program_id, program_index, switched_index);
     // Ensure we have a loader which can parse the NCA.
     if (out_loader) {
         // Try to load the process.
@@ -82,11 +82,11 @@ std::unique_ptr<Process> CreateProcess(Core::System& system, u64 program_id, u8 
 
     std::unique_ptr<Loader::AppLoader> loader;
     Loader::ResultStatus status;
-    return CreateProcessImpl(loader, status, system, nca_raw, program_id, 0);
+    return CreateProcessImpl(loader, status, system, nca_raw, program_id, 0, std::nullopt);
 }
 
-std::unique_ptr<Process> CreateApplicationProcess(std::vector<u8>& out_control, std::unique_ptr<Loader::AppLoader>& out_loader, Loader::ResultStatus& out_load_result, Core::System& system, FileSys::VirtualFile file, u64 program_id, u64 program_index) {
-    if (auto process = CreateProcessImpl(out_loader, out_load_result, system, file, program_id, program_index); process) {
+std::unique_ptr<Process> CreateApplicationProcess(std::vector<u8>& out_control, std::unique_ptr<Loader::AppLoader>& out_loader, Loader::ResultStatus& out_load_result, Core::System& system, FileSys::VirtualFile file, u64 program_id, u64 program_index, std::optional<std::size_t> switched_index) {
+    if (auto process = CreateProcessImpl(out_loader, out_load_result, system, file, program_id, program_index, switched_index); process) {
         FileSys::NACP nacp;
         if (out_loader->ReadControlData(nacp) == Loader::ResultStatus::Success) {
             out_control = nacp.GetRawBytes();

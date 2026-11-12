@@ -191,6 +191,106 @@ std::vector<FileSys::VirtualDir> FindSidecarDirs(const FileSys::VirtualDir& exef
     return dirs;
 }
 
+bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return std::tolower(static_cast<unsigned char>(x)) ==
+                      std::tolower(static_cast<unsigned char>(y));
+           });
+}
+
+// The base/ folder of the dump holding exefs_dir: on the sidecar chain itself
+// (base/program/1/... dumps) or next to the storage root.
+FileSys::VirtualDir FindLooseBaseDirectory(const FileSys::VirtualDir& exefs_dir) {
+    const auto sidecars = FindSidecarDirs(exefs_dir);
+    for (const auto& dir : sidecars) {
+        if (EqualsIgnoreCase(dir->GetName(), "base")) {
+            return dir;
+        }
+    }
+    const auto& storage = sidecars.back();
+    return storage != nullptr ? storage->GetSubdirectory("base") : nullptr;
+}
+
+// Program index 0 of a running consolidated Switch 2 Edition package
+// (<version>/program1 or <version>/program/program1): the Switch 1 program of the same
+// version, whose RomFS is that version's romfs/ over base/romfs. A wrapped package uses a
+// program/0 sibling when the dump has one. nullptr for any other program.
+FileSys::VirtualDir FindEditionProgramZeroRomFS(const FileSys::VirtualDir& exefs_dir) {
+    const auto package = exefs_dir != nullptr ? exefs_dir->GetParentDirectory() : nullptr;
+    if (package == nullptr || !EqualsIgnoreCase(package->GetName(), "program1")) {
+        return nullptr;
+    }
+    auto version = package->GetParentDirectory();
+    if (version != nullptr && EqualsIgnoreCase(version->GetName(), "program")) {
+        if (const auto zero = FindLooseRomFSDirectory(version->GetSubdirectory("0"))) {
+            return zero;
+        }
+        version = version->GetParentDirectory();
+    }
+    std::vector<FileSys::VirtualDir> tiers;
+    for (const auto& tier : {FindLooseRomFSDirectory(version),
+                             FindLooseRomFSDirectory(FindLooseBaseDirectory(exefs_dir))}) {
+        if (tier != nullptr) {
+            tiers.push_back(tier);
+        }
+    }
+    if (tiers.size() <= 1) {
+        return tiers.empty() ? nullptr : tiers.front();
+    }
+    return FileSys::LayeredVfsDirectory::MakeLayeredDirectory(std::move(tiers));
+}
+
+FileSys::VirtualFile PackageMainFile(const FileSys::VirtualDir& package) {
+    const auto exefs = package != nullptr ? package->GetSubdirectory("exefs") : nullptr;
+    if (exefs == nullptr || exefs->GetFile("main.npdm") == nullptr) {
+        return nullptr;
+    }
+    return exefs->GetFile("main");
+}
+
+} // namespace
+
+FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
+                                          std::size_t program_index) {
+    const auto exefs = main != nullptr ? main->GetContainingDirectory() : nullptr;
+    const auto package = exefs != nullptr ? exefs->GetParentDirectory() : nullptr;
+    if (package == nullptr) {
+        return nullptr;
+    }
+    if (program_index == 0 && EqualsIgnoreCase(package->GetName(), "program1")) {
+        // The Switch 1 program of the same version: a program/0 sibling, the version folder's
+        // own exefs/, or the base program when the dump keeps no updated one.
+        auto version = package->GetParentDirectory();
+        if (version != nullptr && EqualsIgnoreCase(version->GetName(), "program")) {
+            if (auto zero = PackageMainFile(version->GetSubdirectory("0"))) {
+                return zero;
+            }
+            version = version->GetParentDirectory();
+        }
+        if (auto legacy = PackageMainFile(version)) {
+            return legacy;
+        }
+        return PackageMainFile(FindLooseBaseDirectory(exefs));
+    }
+    if (program_index == 1 && !EqualsIgnoreCase(package->GetName(), "program1")) {
+        // Back to the edition: the program1 package of this version folder, or of the newest
+        // update for a base program.
+        if (auto edition = PackageMainFile(package->GetSubdirectory("program1"))) {
+            return edition;
+        }
+        const auto storage = FindSidecarDirs(exefs).back();
+        const auto updates = storage != nullptr ? storage->GetSubdirectory("updates") : nullptr;
+        for (const auto& [version, version_dir] : OrderedUpdateVersionDirs(updates)) {
+            if (auto edition = PackageMainFile(version_dir->GetSubdirectory("program1"))) {
+                return edition;
+            }
+        }
+    }
+    return nullptr;
+}
+
+namespace {
+
 // RomFS for a loose ExeFS, mounted as a cascading fallback over the dump's tiers:
 //
 //   1. program tier: <package>/romfs, the companion folder of the running exefs/
@@ -205,6 +305,12 @@ std::vector<FileSys::VirtualDir> FindSidecarDirs(const FileSys::VirtualDir& exef
 // program romfs must never act as an isolated volume root. Nothing is restructured or
 // copied anywhere: the layered mount aliases the tier files and the built image keeps
 // lazy views into them.
+//
+// Exception: a consolidated program1 package with its own romfs/ and a program 0 beside it
+// mounts that romfs alone, as on hardware; the game reaches the Switch 1 data through
+// program index 0 (FindLooseSiblingPrograms). Games probe for this: Super Mario Bros. Wonder
+// mounts program 0 and its upgrade pack only when content:/System/AddressTable is missing,
+// and without them its Switch 2 heap table is absent and boot ends in a null allocation.
 FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
     if (exefs_dir == nullptr) {
         return nullptr;
@@ -230,6 +336,8 @@ FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
 
     // 1. Program tier: the romfs/ extraction folder next to the running exefs/ folder.
     FileSys::VirtualDir program_romfs = FindLooseRomFSDirectory(parent);
+    const bool own_volume =
+        program_romfs != nullptr && FindEditionProgramZeroRomFS(exefs_dir) != nullptr;
 
     // 2. and 3. live at the storage root of the game, which the sidecar walk finds for
     // both <game>/program/1/... and <game>/base/program/1/... dump layouts.
@@ -237,7 +345,7 @@ FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
     FileSys::VirtualDir base_dir;
     const auto sidecars = FindSidecarDirs(exefs_dir);
     const auto& storage = sidecars.back();
-    if (storage != nullptr) {
+    if (storage != nullptr && !own_volume) {
         // 2. Update tier: newest version folder holding a romfs. A tier is skipped, not
         // fatal, when its build differs from the running program: running a 1.0 program
         // against 2.0.1 data boots and then writes to unmapped memory in a loop
@@ -281,17 +389,13 @@ FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
             }
         }
 
-        // 3. Base tier: the base/ folder is either on the sidecar chain itself
-        // (base/program/1/... dumps) or sits next to the storage root.
-        for (const auto& dir : sidecars) {
-            if (equals_ignore_case(dir->GetName(), "base")) {
-                base_dir = dir;
-                break;
-            }
-        }
-        if (base_dir == nullptr) {
-            base_dir = storage->GetSubdirectory("base");
-        }
+        // 3. Base tier.
+        base_dir = FindLooseBaseDirectory(exefs_dir);
+    }
+    if (own_volume) {
+        LOG_INFO(Loader, "Mounting the edition program RomFS {} on its own; program 0 serves the "
+                         "Switch 1 data",
+                 program_romfs->GetFullPath());
     }
 
     std::vector<FileSys::VirtualDir> tiers;
@@ -486,6 +590,10 @@ std::vector<std::pair<u64, FileSys::VirtualDir>> FindLooseAOC(const FileSys::Vir
 std::vector<std::pair<u64, FileSys::VirtualDir>> FindLooseSiblingPrograms(
     const FileSys::VirtualDir& exefs_dir, u64 program_id) {
     std::vector<std::pair<u64, FileSys::VirtualDir>> out;
+    if (auto zero = FindEditionProgramZeroRomFS(exefs_dir)) {
+        out.emplace_back(FileSys::GetBaseTitleIDWithProgramIndex(program_id, 0), std::move(zero));
+        return out;
+    }
     const auto is_index = [](const std::string& name) {
         return !name.empty() && name.size() <= 3 &&
                name.find_first_not_of("0123456789") == std::string::npos;

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -224,6 +225,143 @@ Loader::ResultStatus StatusAfterPatch(std::string nup, Patch&& patch) {
     std::copy(hash.begin(), hash.end(), nup.begin() + 0x18);
     const auto data = std::vector<u8>(nup.begin(), nup.end());
     return NupContainer{std::make_shared<FileSys::VectorVfsFile>(data, "bad.nup")}.GetStatus();
+}
+
+} // namespace
+
+namespace {
+
+// A minimal NUP as other packers write it: each package's RomFS/ExeFS pointer names the given
+// directory (or none), every member stored raw. Lets tests reproduce layouts PackDump never emits.
+struct HandPackage {
+    u64 title_id;
+    u8 kind;
+    u32 version;
+    std::string exefs; ///< Directory path for the ExeFS pointer, empty for none
+    std::string romfs; ///< Directory path for the RomFS pointer, empty for none
+    std::map<std::string, std::string> files;
+};
+
+std::string BuildHandNup(const std::vector<HandPackage>& packages) {
+    struct Dir {
+        std::string name;
+        std::vector<std::size_t> dirs;  // indices into `all`
+        std::vector<std::size_t> files; // indices into `files`
+    };
+    std::vector<Dir> all(packages.size());
+    std::vector<std::pair<std::string, std::string>> files; // name, content
+    std::vector<std::map<std::string, std::size_t>> paths(packages.size());
+    for (std::size_t p = 0; p < packages.size(); ++p) {
+        for (const auto& [path, content] : packages[p].files) {
+            std::size_t dir = p;
+            std::string prefix;
+            std::size_t start = 0;
+            for (std::size_t slash; (slash = path.find('/', start)) != std::string::npos;
+                 start = slash + 1) {
+                const auto name = path.substr(start, slash - start);
+                prefix += (prefix.empty() ? "" : "/") + name;
+                auto& known = paths[p][prefix];
+                if (known == 0) {
+                    all.push_back({name, {}, {}});
+                    known = all.size() - 1;
+                    all[dir].dirs.push_back(known);
+                }
+                dir = known;
+            }
+            files.emplace_back(path.substr(start), content);
+            all[dir].files.push_back(files.size() - 1);
+        }
+    }
+
+    std::string pool;
+    std::vector<std::pair<u32, u32>> dir_names(all.size()), file_names(files.size());
+    for (std::size_t i = 0; i < all.size(); ++i) {
+        dir_names[i] = {static_cast<u32>(pool.size()), static_cast<u32>(all[i].name.size())};
+        pool += all[i].name;
+    }
+    for (std::size_t i = 0; i < files.size(); ++i) {
+        file_names[i] = {static_cast<u32>(pool.size()), static_cast<u32>(files[i].first.size())};
+        pool += files[i].first;
+    }
+    std::vector<u32> children;
+    std::vector<std::pair<u32, u32>> ranges(all.size());
+    for (std::size_t i = 0; i < all.size(); ++i) {
+        ranges[i].first = static_cast<u32>(children.size());
+        for (const auto dir : all[i].dirs) {
+            children.push_back(static_cast<u32>(dir));
+        }
+        for (const auto file : all[i].files) {
+            children.push_back(static_cast<u32>(all.size() + file));
+        }
+        ranges[i].second = static_cast<u32>(children.size()) - ranges[i].first;
+    }
+
+    const u64 records = 0x30 + packages.size() * 0x40 + all.size() * 0x18 + files.size() * 0x50;
+    const u64 pool_offset = records + children.size() * 4;
+    std::string toc(pool_offset + pool.size(), '\0');
+    const u64 blob = (0x80 + toc.size() + 0xF) & ~u64{0xF};
+    std::string data;
+    std::vector<u64> extents;
+    for (const auto& file : files) {
+        extents.push_back(file.second.empty() ? 0 : blob + data.size());
+        data += file.second;
+        data.resize((data.size() + 0xF) & ~std::size_t{0xF}, '\0');
+    }
+
+    toc.replace(0, 4, "TOC\x01");
+    SetLe(toc, 0x04, packages.size(), 4);
+    SetLe(toc, 0x08, all.size(), 8);
+    SetLe(toc, 0x10, files.size(), 8);
+    SetLe(toc, 0x18, pool_offset, 8);
+    SetLe(toc, 0x20, pool.size(), 8);
+    for (std::size_t p = 0; p < packages.size(); ++p) {
+        const auto pointer = [&](const std::string& path) -> u64 {
+            const auto it = paths[p].find(path);
+            return path.empty() || it == paths[p].end() ? 0xFFFFFFFF : it->second;
+        };
+        const u64 at = 0x30 + p * 0x40;
+        SetLe(toc, at, packages[p].title_id, 8);
+        SetLe(toc, at + 0x08, p, 4);
+        SetLe(toc, at + 0x0C, pointer(packages[p].exefs), 4);
+        SetLe(toc, at + 0x10, pointer(packages[p].romfs), 4);
+        SetLe(toc, at + 0x14, packages[p].version, 4);
+        toc[at + 0x18] = static_cast<char>(packages[p].kind);
+    }
+    for (std::size_t i = 0; i < all.size(); ++i) {
+        const u64 at = 0x30 + packages.size() * 0x40 + i * 0x18;
+        SetLe(toc, at, dir_names[i].first, 4);
+        SetLe(toc, at + 4, dir_names[i].second, 4);
+        SetLe(toc, at + 8, ranges[i].first, 4);
+        SetLe(toc, at + 12, ranges[i].second, 4);
+    }
+    for (std::size_t i = 0; i < files.size(); ++i) {
+        const u64 at = 0x30 + packages.size() * 0x40 + all.size() * 0x18 + i * 0x50;
+        const auto& content = files[i].second;
+        SetLe(toc, at, file_names[i].first, 4);
+        SetLe(toc, at + 4, file_names[i].second, 4);
+        SetLe(toc, at + 0x08, content.size(), 8);
+        SetLe(toc, at + 0x10, extents[i], 8);
+        SetLe(toc, at + 0x18, content.size(), 8);
+        const auto hash = Sha256(content);
+        std::copy(hash.begin(), hash.end(), toc.begin() + static_cast<std::ptrdiff_t>(at + 0x20));
+    }
+    for (std::size_t i = 0; i < children.size(); ++i) {
+        SetLe(toc, records + i * 4, children[i], 4);
+    }
+    toc.replace(pool_offset, pool.size(), pool);
+
+    std::string out(blob, '\0');
+    out.replace(0, 4, "NUP\x01");
+    SetLe(out, 0x04, 0x80, 2);
+    SetLe(out, 0x08, 0x80, 8);
+    SetLe(out, 0x10, toc.size(), 8);
+    const auto toc_hash = Sha256(toc);
+    std::copy(toc_hash.begin(), toc_hash.end(), out.begin() + 0x18);
+    SetLe(out, 0x38, blob, 8);
+    SetLe(out, 0x40, blob + data.size(), 8);
+    SetLe(out, 0x48, packages.size(), 4);
+    out.replace(0x80, toc.size(), toc);
+    return out + data;
 }
 
 } // namespace
@@ -1470,4 +1608,220 @@ TEST_CASE("NUP reports Switch 2 Editions", "[nup]") {
     REQUIRE(FileSys::Nup::PackDump(plain, t.path / "plain.nup") ==
             FileSys::Nup::PackResult::Success);
     REQUIRE(editions(t.path / "plain.nup").empty());
+}
+
+TEST_CASE("NUP serves a Switch 2 Edition program1 RomFS and its nested upgrade pack",
+          "[nup]") {
+    // Super Mario Bros. Wonder: the Switch 2 program sits in updates/<version>/program1 next
+    // to the Switch 1 update, and its upgrade pack keeps the data under program/0/romfs.
+    constexpr u64 Edition = 0x040015100B514001ULL;
+    constexpr u64 UpgradePack = 0x010015100B515001ULL;
+    TempDir t;
+    FileSys::RealVfsFilesystem real;
+
+    SECTION("PackDump flattens the upgrade pack and records its RomFS") {
+        const auto root = t.path / "Wonder";
+        Put(root / "base/exefs/main", "nx main");
+        Put(root / "base/exefs/main.npdm", Npdm(Edition));
+        Put(root / "base/romfs/base.bin", "base");
+        const auto pack = root / "dlc/010015100B515001/0";
+        Put(pack / "base/program/0/romfs/old.bin", "old");
+        Put(pack / "updates/131072/program/0/romfs/System/HeapSize/Ounce.byml", "heap");
+        const auto archive = t.path / "Wonder.nup";
+        REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        const auto addons = nup.GetAddonRomFS(Edition);
+        REQUIRE(addons.size() == 1);
+        CHECK(addons.front().first == 0x040015100B515001ULL);
+        CHECK(addons.front().second->GetFileRelative("System/HeapSize/Ounce.byml"));
+    }
+
+    SECTION("a NupStudio archive keeps program1 and the nested upgrade pack") {
+        const auto archive = t.path / "Wonder.nup";
+        {
+            std::ofstream(archive, std::ios::binary) << BuildHandNup({
+                {Edition, 0, 0, "exefs", "romfs",
+                 {{"exefs/main", "nx main"},
+                  {"exefs/main.npdm", Npdm(Edition)},
+                  {"romfs/System/AddressTable", "nx"},
+                  {"romfs/base.bin", "base"}}},
+                {Edition, 1, 327680, "program1/exefs", "romfs",
+                 {{"romfs/System/AddressTable", "nx update"},
+                  {"romfs/update.bin", "update"},
+                  {"program1/exefs/main", "native main"},
+                  {"program1/exefs/main.npdm", Npdm(Edition)},
+                  {"program1/romfs/System/RegionLangMask.txt", "mask"}}},
+                {UpgradePack, 2, 0, "", "",
+                 {{"base/program/0/romfs/old.bin", "old"},
+                  {"updates/65536/program/0/romfs/stale.bin", "stale"},
+                  {"updates/131072/program/0/romfs/System/HeapSize/Ounce.byml", "heap"},
+                  {"updates/notes/program/0/romfs/ignored.bin", "not a version"}}},
+            });
+        }
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+
+        // The newest upgrade-pack patch is the full patched RomFS.
+        const auto addons = nup.GetAddonRomFS(Edition);
+        REQUIRE(addons.size() == 1);
+        const auto& addon = addons.front().second;
+        CHECK(addon->GetFileRelative("System/HeapSize/Ounce.byml"));
+        CHECK_FALSE(addon->GetFile("old.bin"));
+        CHECK_FALSE(addon->GetFile("stale.bin"));
+        CHECK_FALSE(addon->GetFile("ignored.bin"));
+
+        const auto own = nup.GetEditionRomFSDir(1);
+        REQUIRE(own);
+        CHECK(own->GetFileRelative("System/RegionLangMask.txt"));
+        CHECK_FALSE(own->GetFileRelative("System/AddressTable"));
+        CHECK(nup.GetEditionRomFSDir(0) == nullptr);
+        CHECK(nup.GetEditionRomFSDir(2) == nullptr);
+        CHECK(nup.GetEditionRomFSDir(3) == nullptr);
+
+        // The edition program sees only its own RomFS; the Switch 1 data is program 0.
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        const auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
+        CHECK(tree->GetFileRelative("System/RegionLangMask.txt"));
+        CHECK_FALSE(tree->GetFileRelative("System/AddressTable"));
+        CHECK_FALSE(tree->GetFile("base.bin"));
+    }
+
+    SECTION("an add-on falls back to its base program and a plain program keeps merged data") {
+        const auto archive = t.path / "Plain.nup";
+        {
+            std::ofstream(archive, std::ios::binary) << BuildHandNup({
+                {Edition, 0, 0, "exefs", "romfs",
+                 {{"exefs/main", "main"},
+                  {"exefs/main.npdm", Npdm(Edition)},
+                  {"romfs/base.bin", "base"}}},
+                {Edition, 1, 65536, "exefs", "romfs",
+                 {{"exefs/main", "update main"},
+                  {"exefs/main.npdm", Npdm(Edition)},
+                  {"romfs/update.bin", "update"},
+                  {"program1/romfs/unused.bin", "not booted"}}},
+                {UpgradePack, 2, 0, "", "", {{"base/program/0/romfs/old.bin", "old"}}},
+            });
+        }
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        const auto addons = nup.GetAddonRomFS(Edition);
+        REQUIRE(addons.size() == 1);
+        CHECK(addons.front().second->GetFile("old.bin"));
+        // program1/romfs without a booting program1/exefs is not the program's RomFS.
+        CHECK(nup.GetEditionRomFSDir(1) == nullptr);
+
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        const auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
+        CHECK(tree->GetFile("base.bin"));
+        CHECK(tree->GetFile("update.bin"));
+    }
+}
+TEST_CASE("NUP ExecuteProgram into index 0 boots the Switch 1 program of an edition", "[nup]") {
+    constexpr u64 Edition = 0x040015100B514001ULL;
+    constexpr u64 Switch1 = 0x010015100B514000ULL;
+    TempDir t;
+    FileSys::RealVfsFilesystem real;
+    const auto build = [&](bool legacy_exefs) {
+        std::map<std::string, std::string> update{
+            {"romfs/System/AddressTable", "nx update"},
+            {"romfs/update.bin", "update"},
+            {"program1/exefs/main", "native main"},
+            {"program1/exefs/main.npdm", Npdm(Edition)},
+            {"program1/romfs/System/RegionLangMask.txt", "mask"}};
+        if (legacy_exefs) {
+            update["exefs/main"] = "nx update main";
+            update["exefs/main.npdm"] = NativeNpdm(Switch1);
+        }
+        const auto archive = t.path / (legacy_exefs ? "Legacy.nup" : "NoLegacy.nup");
+        std::ofstream(archive, std::ios::binary) << BuildHandNup({
+            {Edition, 0, 0, "exefs", "romfs",
+             {{"exefs/main", "nx main"},
+              {"exefs/main.npdm", Npdm(Switch1)},
+              {"romfs/System/AddressTable", "nx"},
+              {"romfs/base.bin", "base"}}},
+            {Edition, 1, 327680, "program1/exefs", "romfs", update},
+        });
+        return archive;
+    };
+    const auto romfs_of = [](Loader::AppLoader_NUP& loader) {
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
+        return tree;
+    };
+
+    SECTION("the update's legacy ExeFS with the merged data") {
+        const auto archive = build(true);
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        CHECK(nup.GetLegacyExeFSDir(0) == nullptr);
+        REQUIRE(nup.GetLegacyExeFSDir(1));
+
+        for (const auto index : {std::optional<std::size_t>{}, std::optional<std::size_t>{1}}) {
+            const auto edition = Loader::SelectNupBootProgram(nup, index);
+            REQUIRE(edition.exefs);
+            CHECK(Read(edition.exefs->GetFile("main")) == "native main");
+            CHECK(edition.edition_romfs);
+            CHECK_FALSE(edition.switch1_program);
+        }
+        const auto switch1 = Loader::SelectNupBootProgram(nup, 0);
+        REQUIRE(switch1.exefs);
+        CHECK(Read(switch1.exefs->GetFile("main")) == "nx update main");
+        CHECK(switch1.switch1_program);
+        CHECK_FALSE(switch1.base_romfs_only);
+        CHECK(switch1.edition_romfs == nullptr);
+
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read), 0};
+        u64 program_id{};
+        REQUIRE(loader.ReadProgramId(program_id) == Loader::ResultStatus::Success);
+        CHECK(program_id == Switch1);
+        const auto tree = romfs_of(loader);
+        CHECK(tree->GetFile("base.bin"));
+        CHECK(tree->GetFile("update.bin"));
+        CHECK(tree->GetFileRelative("System/AddressTable"));
+        CHECK_FALSE(tree->GetFileRelative("System/RegionLangMask.txt"));
+    }
+
+    SECTION("without it the base program runs with the base data only") {
+        const auto archive = build(false);
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        CHECK(nup.GetLegacyExeFSDir(1) == nullptr);
+        const auto switch1 = Loader::SelectNupBootProgram(nup, 0);
+        REQUIRE(switch1.exefs);
+        CHECK(Read(switch1.exefs->GetFile("main")) == "nx main");
+        CHECK(switch1.switch1_program);
+        CHECK(switch1.base_romfs_only);
+
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read), 0};
+        u64 program_id{};
+        REQUIRE(loader.ReadProgramId(program_id) == Loader::ResultStatus::Success);
+        // The base NPDM here is not a full META header: the program index 0 ID stands in.
+        CHECK(program_id == 0x040015100B514000ULL);
+        const auto tree = romfs_of(loader);
+        CHECK(tree->GetFile("base.bin"));
+        CHECK_FALSE(tree->GetFile("update.bin"));
+    }
+
+    SECTION("a program that is not an edition ignores the switch") {
+        const auto archive = t.path / "Plain.nup";
+        std::ofstream(archive, std::ios::binary) << BuildHandNup({
+            {Switch1, 0, 0, "exefs", "romfs",
+             {{"exefs/main", "main"}, {"exefs/main.npdm", Npdm(Switch1)}, {"romfs/a", "a"}}},
+        });
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        const auto boot = Loader::SelectNupBootProgram(nup, 0);
+        REQUIRE(boot.exefs);
+        CHECK(Read(boot.exefs->GetFile("main")) == "main");
+        CHECK_FALSE(boot.switch1_program);
+    }
 }

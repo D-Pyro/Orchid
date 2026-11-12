@@ -364,7 +364,8 @@ ResultStatus AppLoader::ReadDisplayVersion(std::string& version) {
  */
 static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileSys::VirtualFile file,
                                                 FileType type, u64 program_id,
-                                                std::size_t program_index) {
+                                                std::size_t program_index,
+                                                std::optional<std::size_t> switched_index) {
     switch (type) {
     // NX NSO file format.
     case FileType::NSO:
@@ -417,10 +418,17 @@ static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileSys::V
 
     // NUP (NX Package) container format.
     case FileType::NUP:
-        return std::make_unique<AppLoader_NUP>(std::move(file));
+        return std::make_unique<AppLoader_NUP>(std::move(file), switched_index);
 
     // NX deconstructed ROM directory.
     case FileType::DeconstructedRomDirectory:
+        if (switched_index) {
+            if (auto other = FindLooseProgramMain(file, *switched_index)) {
+                LOG_INFO(Loader, "Program index {} boots {}", *switched_index,
+                         other->GetFullPath());
+                file = std::move(other);
+            }
+        }
         return std::make_unique<AppLoader_DeconstructedRomDirectory>(std::move(file));
 
     default:
@@ -429,7 +437,8 @@ static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileSys::V
 }
 
 std::unique_ptr<AppLoader> GetLoader(Core::System& system, FileSys::VirtualFile file,
-                                     u64 program_id, std::size_t program_index) {
+                                     u64 program_id, std::size_t program_index,
+                                     std::optional<std::size_t> switched_index) {
     if (!file) {
         return nullptr;
     }
@@ -460,7 +469,16 @@ std::unique_ptr<AppLoader> GetLoader(Core::System& system, FileSys::VirtualFile 
 
     LOG_DEBUG(Loader, "Loading file {} as {}...", file->GetName(), GetFileTypeString(type));
 
-    return GetFileLoader(system, std::move(file), type, program_id, program_index);
+    return GetFileLoader(system, std::move(file), type, program_id, program_index,
+                         switched_index);
+}
+
+std::optional<std::size_t> SwitchedProgramIndex(s32 previous_program_index, s32 program_index) {
+    if (previous_program_index < 0 || program_index < 0 ||
+        previous_program_index == program_index) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(program_index);
 }
 
 } // namespace Loader

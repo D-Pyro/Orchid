@@ -63,6 +63,8 @@
 #include "core/hle/service/sm/sm.h"
 #include "core/internal_network/network.h"
 #include "core/loader/loader.h"
+#include "core/loader/deconstructed_rom_directory.h"
+#include "core/loader/nup.h"
 #include "core/memory.h"
 #include "core/memory/cheat_engine.h"
 #include "core/perf_stats.h"
@@ -126,7 +128,8 @@ namespace {
 
 // The memory layout is picked from the NPDM, before the kernel exists.
 bool IsSwitch2Program(Core::System& system, const FileSys::VirtualFilesystem& vfs,
-                      const std::string& filepath, u64 program_id, std::size_t program_index) {
+                      const std::string& filepath, u64 program_id, std::size_t program_index,
+                      std::optional<std::size_t> switched) {
     const auto file = GetGameFileFromPath(vfs, filepath);
     if (file == nullptr) {
         return false;
@@ -138,29 +141,27 @@ bool IsSwitch2Program(Core::System& system, const FileSys::VirtualFilesystem& vf
         if (nup.GetStatus() != Loader::ResultStatus::Success) {
             return false;
         }
-        // The ExeFS AppLoader_NUP boots: the update's over the base's, or a standalone update.
-        std::optional<std::size_t> program;
-        if (const auto update = nup.FindEnabledUpdatePackage();
-            update && nup.GetExeFSDir(*update) != nullptr) {
-            program = update;
-        } else if (const auto base = nup.FindBasePackage();
-                   base && nup.GetExeFSDir(*base) != nullptr) {
-            program = base;
-        }
-        const auto exefs = program ? nup.GetExeFSDir(*program) : nullptr;
+        // The ExeFS AppLoader_NUP boots.
+        const auto exefs = Loader::SelectNupBootProgram(nup, switched).exefs;
         const auto npdm = exefs != nullptr ? exefs->GetFile("main.npdm") : nullptr;
         return npdm != nullptr && metadata.Load(npdm) == Loader::ResultStatus::Success &&
                metadata.IsSwitch2();
     }
 
-    const auto dir = file->GetContainingDirectory();
+    auto main = file;
+    if (switched) {
+        if (auto other = Loader::FindLooseProgramMain(file, *switched)) {
+            main = std::move(other);
+        }
+    }
+    const auto dir = main->GetContainingDirectory();
     const auto npdm = dir != nullptr ? dir->GetFile("main.npdm") : nullptr;
     if (npdm != nullptr && metadata.Load(npdm) == Loader::ResultStatus::Success) {
         return metadata.IsSwitch2();
     }
 
     // NSP/XCI and installed NCAs keep the NPDM in the program NCA's ExeFS.
-    const auto loader = Loader::GetLoader(system, file, program_id, program_index);
+    const auto loader = Loader::GetLoader(system, file, program_id, program_index, switched);
     if (loader == nullptr ||
         loader->ReadProgramMetadata(metadata) != Loader::ResultStatus::Success) {
         return false;
@@ -373,10 +374,12 @@ struct System::Impl {
             fs_controller.InitTempStorage();
         }
 
+        const auto switched_index =
+            Loader::SwitchedProgramIndex(params.previous_program_index, params.program_index);
         const bool switch2_program =
             virtual_filesystem != nullptr &&
             IsSwitch2Program(system, virtual_filesystem, filepath, params.program_id,
-                             params.program_index);
+                             params.program_index, switched_index);
         Settings::SetCurrentProgramIsSwitch2(switch2_program);
         Settings::SetAstcRecompressionOverride(std::nullopt);
 
@@ -414,7 +417,7 @@ struct System::Impl {
         // Create the application process
         Loader::ResultStatus load_result{};
         std::vector<u8> control;
-        auto process = Service::AM::CreateApplicationProcess(control, app_loader, load_result, system, file, params.program_id, params.program_index);
+        auto process = Service::AM::CreateApplicationProcess(control, app_loader, load_result, system, file, params.program_id, params.program_index, switched_index);
         if (load_result != Loader::ResultStatus::Success) {
             LOG_CRITICAL(Core, "Failed to load ROM (Error {})!", load_result);
             ShutdownMainProcess();

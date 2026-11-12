@@ -168,6 +168,12 @@ public:
 
     VirtualDir GetExeFSDir(std::size_t package_index);
     VirtualDir GetRomFSDir(std::size_t package_index);
+    /// The own RomFS of a Switch 2 Edition program packed as <package>/program1 next to the
+    /// legacy data: program1/romfs when the package boots program1/exefs, else nullptr.
+    VirtualDir GetEditionRomFSDir(std::size_t package_index);
+    /// The Switch 1 ExeFS packed next to such a program1 package (<package>/exefs), the program
+    /// an ExecuteProgram restart into program index 0 boots. nullptr when absent.
+    VirtualDir GetLegacyExeFSDir(std::size_t package_index);
 
     std::vector<std::size_t> FindAddonPackages(u64 program_id) const;
 
@@ -214,6 +220,8 @@ private:
     bool Parse();
     bool ParseMeta(PackageInfo& package);
     bool ValidateDirTree() const;
+    u32 FindChildDir(u32 dir_index, std::string_view name) const;
+    u32 FindNestedAddonRomFS(u32 root_dir) const;
     void BuildDirTree(u32 dir_index, VectorVfsDirectory& out);
     VirtualDir BuildPackageDir(u32 dir_index);
     std::vector<u8> ReadExtentRaw(const FileNode& node) const;

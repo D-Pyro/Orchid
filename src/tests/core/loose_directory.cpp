@@ -420,11 +420,13 @@ TEST_CASE("RomFS factory serves loose sibling programs by program index", "[loos
     FileSys::SetBootContent({});
 }
 
-TEST_CASE("Loose wrapped program1 keeps its own update RomFS tier", "[loose_directory]") {
+TEST_CASE("Loose program1 packages mount their own RomFS and serve the Switch 1 data as program 0",
+          "[loose_directory]") {
     LooseTestDirectory t;
     const auto game = t.root / "Game";
     LooseTestDirectory::ExeFS(game / "base/exefs", "base");
     LooseTestDirectory::Put(game / "base/romfs/base.bin", "base");
+    LooseTestDirectory::Put(game / "base/romfs/System/AddressTable", "nx");
 
     FileSys::RealVfsFilesystem vfs;
     const auto compose = [&vfs](const fs::path& exefs) {
@@ -436,21 +438,71 @@ TEST_CASE("Loose wrapped program1 keeps its own update RomFS tier", "[loose_dire
         REQUIRE(tree);
         return tree;
     };
+    const auto program_zero = [&vfs](const fs::path& exefs) {
+        const auto entries = Loader::FindLooseSiblingPrograms(
+            vfs.OpenDirectory(exefs.string(), FileSys::OpenMode::Read), 0x040015100B514001ULL);
+        REQUIRE(entries.size() == 1);
+        CHECK(entries.front().first == 0x040015100B514000ULL);
+        return entries.front().second;
+    };
 
-    for (const auto name : {"updates", "upgrade"}) {
-        DYNAMIC_SECTION(name << "/<version>/program/program1") {
-            const auto version = game / name / "65536";
+    for (const auto layout : {"updates/65536/program1", "upgrade/65536/program/program1"}) {
+        DYNAMIC_SECTION(layout) {
+            const auto program1 = game / layout;
+            const auto version = game / (std::string_view{layout}.starts_with("updates")
+                                             ? "updates/65536"
+                                             : "upgrade/65536");
             // The native main differs in size from the legacy main of the same version.
             LooseTestDirectory::ExeFS(version / "exefs", "legacy");
             LooseTestDirectory::Put(version / "romfs/update.bin", "update");
-            const auto program1 = version / "program/program1";
             LooseTestDirectory::ExeFS(program1 / "exefs", "native edition");
             LooseTestDirectory::Put(program1 / "romfs/Empty", "");
 
+            // The game probes its own RomFS: Switch 1 files must not show through.
             const auto tree = compose(program1 / "exefs");
-            CHECK(tree->GetFile("update.bin"));
-            CHECK(tree->GetFile("base.bin"));
+            CHECK(tree->GetFile("Empty"));
+            CHECK_FALSE(tree->GetFile("update.bin"));
+            CHECK_FALSE(tree->GetFile("base.bin"));
+            CHECK_FALSE(tree->GetSubdirectory("System"));
+
+            const auto zero = program_zero(program1 / "exefs");
+            REQUIRE(zero->GetFile("update.bin"));
+            REQUIRE(zero->GetFile("base.bin"));
+            CHECK(zero->GetSubdirectory("System"));
         }
+    }
+    SECTION("a wrapped program1 prefers a program/0 sibling") {
+        const auto programs = game / "updates/65536/program";
+        LooseTestDirectory::Put(game / "updates/65536/romfs/update.bin", "update");
+        LooseTestDirectory::ExeFS(programs / "program1/exefs", "native edition");
+        LooseTestDirectory::Put(programs / "program1/romfs/Empty", "");
+        LooseTestDirectory::Put(programs / "0/romfs/zero.bin", "zero");
+
+        const auto zero = program_zero(programs / "program1/exefs");
+        CHECK(zero->GetFile("zero.bin"));
+        CHECK_FALSE(zero->GetFile("update.bin"));
+    }
+    SECTION("a program1 without its own RomFS keeps the layered data") {
+        const auto program1 = game / "updates/65536/program1";
+        LooseTestDirectory::ExeFS(game / "updates/65536/exefs", "legacy");
+        LooseTestDirectory::Put(game / "updates/65536/romfs/update.bin", "update");
+        LooseTestDirectory::ExeFS(program1 / "exefs", "native edition");
+
+        const auto tree = compose(program1 / "exefs");
+        CHECK(tree->GetFile("update.bin"));
+        CHECK(tree->GetFile("base.bin"));
+    }
+    SECTION("a program1 with nothing beside it keeps its layered RomFS") {
+        fs::remove_all(game / "base");
+        const auto program1 = game / "updates/65536/program1";
+        LooseTestDirectory::ExeFS(program1 / "exefs", "native edition");
+        LooseTestDirectory::Put(program1 / "romfs/own.bin", "own");
+
+        CHECK(Loader::FindLooseSiblingPrograms(
+                  vfs.OpenDirectory((program1 / "exefs").string(), FileSys::OpenMode::Read),
+                  0x040015100B514001ULL)
+                  .empty());
+        CHECK(compose(program1 / "exefs")->GetFile("own.bin"));
     }
     SECTION("a program outside the version folder still skips a different build") {
         LooseTestDirectory::ExeFS(game / "updates/65536/exefs", "legacy");
@@ -461,5 +513,63 @@ TEST_CASE("Loose wrapped program1 keeps its own update RomFS tier", "[loose_dire
         const auto tree = compose(game / "program/1/exefs");
         CHECK_FALSE(tree->GetFile("update.bin"));
         CHECK(tree->GetFile("base.bin"));
+    }
+}
+
+TEST_CASE("ExecuteProgram restarts switch between the edition and its Switch 1 program",
+          "[loose_directory]") {
+    // A frontend boot leaves the previous program index at -1, whatever program ID it passes.
+    CHECK_FALSE(Loader::SwitchedProgramIndex(-1, 0));
+    CHECK_FALSE(Loader::SwitchedProgramIndex(-1, 1));
+    CHECK_FALSE(Loader::SwitchedProgramIndex(1, 1));
+    CHECK_FALSE(Loader::SwitchedProgramIndex(1, -1));
+    CHECK(Loader::SwitchedProgramIndex(1, 0) == std::size_t{0});
+    CHECK(Loader::SwitchedProgramIndex(0, 1) == std::size_t{1});
+
+    LooseTestDirectory t;
+    const auto game = t.root / "Wonder";
+    LooseTestDirectory::ExeFS(game / "base/exefs", "base");
+    const auto version = game / "updates/327680";
+    LooseTestDirectory::ExeFS(version / "exefs", "update");
+    LooseTestDirectory::ExeFS(version / "program1/exefs", "edition");
+    LooseTestDirectory::ExeFS(game / "updates/65536/program1/exefs", "older edition");
+
+    FileSys::RealVfsFilesystem vfs;
+    const auto open = [&vfs](const fs::path& path) {
+        return vfs.OpenFile(path.string(), FileSys::OpenMode::Read);
+    };
+    const auto main_of = [&](const fs::path& main, std::size_t index) -> std::string {
+        const auto found = Loader::FindLooseProgramMain(open(main), index);
+        if (found == nullptr) {
+            return {};
+        }
+        const auto bytes = found->ReadAllBytes();
+        return {bytes.begin(), bytes.end()};
+    };
+
+    CHECK(main_of(version / "program1/exefs/main", 0) == "update");
+    CHECK(main_of(version / "exefs/main", 1) == "edition");
+    CHECK(main_of(game / "base/exefs/main", 1) == "edition");
+    CHECK(main_of(version / "program1/exefs/main", 1).empty());
+    CHECK(main_of(version / "exefs/main", 0).empty());
+    CHECK(main_of(version / "program1/exefs/main", 2).empty());
+
+    SECTION("without an updated Switch 1 program the base one runs") {
+        fs::remove_all(version / "exefs");
+        CHECK(main_of(version / "program1/exefs/main", 0) == "base");
+    }
+    SECTION("a wrapped program1 prefers its program/0 sibling") {
+        const auto programs = game / "upgrade/65536/program";
+        LooseTestDirectory::ExeFS(programs / "program1/exefs", "wrapped edition");
+        LooseTestDirectory::ExeFS(programs / "0/exefs", "zero");
+        CHECK(main_of(programs / "program1/exefs/main", 0) == "zero");
+        fs::remove_all(programs / "0");
+        LooseTestDirectory::ExeFS(game / "upgrade/65536/exefs", "upgrade");
+        CHECK(main_of(programs / "program1/exefs/main", 0) == "upgrade");
+    }
+    SECTION("a dump without a Switch 1 program has nothing to switch to") {
+        fs::remove_all(version / "exefs");
+        fs::remove_all(game / "base");
+        CHECK(main_of(version / "program1/exefs/main", 0).empty());
     }
 }

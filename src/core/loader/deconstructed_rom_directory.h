@@ -28,6 +28,12 @@ std::vector<std::pair<u64, FileSys::VirtualDir>> FindLooseAOC(
 std::vector<std::pair<u64, FileSys::VirtualDir>> FindLooseSiblingPrograms(
     const FileSys::VirtualDir& exefs_dir, u64 program_id);
 
+/// The main NSO an ExecuteProgram restart into `program_index` boots from a loose Switch 2
+/// Edition dump: the Switch 1 program (index 0) next to a program1 package, or program1
+/// (index 1) from the Switch 1 program. nullptr when the dump has no such program.
+FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
+                                          std::size_t program_index);
+
 /**
  * This class loads a "deconstructed ROM directory", which are the typical format we see for Switch
  * game dumps. The path should be a "main" NSO, which must be in a directory that contains the other

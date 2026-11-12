@@ -13,6 +13,7 @@
 #include "core/file_sys/common_funcs.h"
 #include "core/file_sys/control_metadata.h"
 #include "core/file_sys/patch_manager.h"
+#include "core/file_sys/program_metadata.h"
 #include "core/file_sys/romfs.h"
 #include "core/file_sys/romfs_factory.h"
 #include "core/file_sys/vfs/vfs_vector.h"
@@ -106,46 +107,89 @@ std::string DecodeVersion(u32 version) {
 
 } // namespace
 
-AppLoader_NUP::AppLoader_NUP(FileSys::VirtualFile file_)
+NupBootProgram SelectNupBootProgram(FileSys::NupContainer& nup,
+                                    std::optional<std::size_t> switched_index) {
+    NupBootProgram boot;
+    const auto base_index = nup.FindBasePackage();
+    boot.update_index = nup.FindEnabledUpdatePackage();
+
+    // The program comes from the base package; a standalone update container
+    // (SPEC §4.1.2) carries a complete patched tree and boots on its own.
+    std::optional<std::size_t> exefs_index;
+    if (base_index && nup.GetExeFSDir(*base_index) != nullptr) {
+        boot.program_index = base_index;
+        exefs_index = boot.update_index && nup.GetExeFSDir(*boot.update_index) != nullptr
+                          ? boot.update_index
+                          : base_index;
+    } else if (boot.update_index && nup.GetExeFSDir(*boot.update_index) != nullptr) {
+        LOG_INFO(Loader,
+                 "NUP container is a standalone update; booting the update program directly");
+        boot.program_index = boot.update_index;
+        exefs_index = boot.update_index;
+    }
+    if (!exefs_index) {
+        boot.program_index.reset();
+        return boot;
+    }
+    boot.exefs = nup.GetExeFSDir(*exefs_index);
+    boot.edition_romfs = nup.GetEditionRomFSDir(*exefs_index);
+
+    // ExecuteProgram into index 0 of a Switch 2 Edition runs its Switch 1 program: the legacy
+    // ExeFS packed next to program1, else the base program with the base data it was built for.
+    if (switched_index == std::size_t{0} && boot.edition_romfs != nullptr) {
+        boot.edition_romfs = nullptr;
+        if (auto legacy = nup.GetLegacyExeFSDir(*exefs_index)) {
+            boot.exefs = std::move(legacy);
+        } else if (base_index && *base_index != *exefs_index) {
+            boot.exefs = nup.GetExeFSDir(*base_index);
+            boot.base_romfs_only = true;
+        } else {
+            boot.exefs = nullptr;
+        }
+        boot.switch1_program = boot.exefs != nullptr;
+    }
+    return boot;
+}
+
+AppLoader_NUP::AppLoader_NUP(FileSys::VirtualFile file_, std::optional<std::size_t> switched_index)
     : AppLoader(std::move(file_)), nup(std::make_unique<NupContainer>(file)) {
     if (nup->GetStatus() != ResultStatus::Success) {
         return;
     }
 
-    const auto base_index = nup->FindBasePackage();
-    update_index = nup->FindEnabledUpdatePackage();
-
-    // The program comes from the base package; a standalone update container
-    // (SPEC §4.1.2) carries a complete patched tree and boots on its own.
-    std::optional<std::size_t> program_index;
-    std::optional<std::size_t> exefs_index;
-    if (base_index && nup->GetExeFSDir(*base_index) != nullptr) {
-        program_index = base_index;
-        exefs_index = update_index && nup->GetExeFSDir(*update_index) != nullptr
-                          ? update_index
-                          : base_index;
-    } else if (update_index && nup->GetExeFSDir(*update_index) != nullptr) {
-        LOG_INFO(Loader,
-                 "NUP container is a standalone update; booting the update program directly");
-        program_index = update_index;
-        exefs_index = update_index;
-    }
-    if (!program_index || !exefs_index) {
+    auto boot = SelectNupBootProgram(*nup, switched_index);
+    update_index = boot.update_index;
+    if (!boot.program_index || boot.exefs == nullptr) {
         LOG_ERROR(Loader, "NUP container has no package with a usable ExeFS");
         return;
     }
 
-    const auto& program = nup->GetPackages()[*program_index];
+    const auto& program = nup->GetPackages()[*boot.program_index];
     base_title_id = program.title_id;
     has_program = true;
 
-    const auto exefs = nup->GetExeFSDir(*exefs_index);
-    if (exefs == nullptr || exefs->GetFile("main") == nullptr ||
-        exefs->GetFile("main.npdm") == nullptr) {
+    const auto exefs = boot.exefs;
+    if (exefs->GetFile("main") == nullptr || exefs->GetFile("main.npdm") == nullptr) {
         LOG_ERROR(Loader, "NUP package has no usable ExeFS");
         return;
     }
     secondary_loader = std::make_unique<AppLoader_DeconstructedRomDirectory>(exefs, true);
+    edition_romfs = std::move(boot.edition_romfs);
+    base_romfs_only = boot.base_romfs_only;
+    if (edition_romfs != nullptr) {
+        LOG_INFO(Loader, "NUP Switch 2 Edition program: mounting program1/romfs on its own, "
+                         "program 0 serves the merged base and update data");
+    }
+    if (boot.switch1_program) {
+        // The Switch 1 program runs under its own program ID (its saves and add-ons).
+        FileSys::ProgramMetadata metadata;
+        base_title_id = metadata.Load(exefs->GetFile("main.npdm")) == ResultStatus::Success
+                            ? metadata.GetTitleID()
+                            : FileSys::GetBaseTitleIDWithProgramIndex(base_title_id, 0);
+        LOG_INFO(Loader, "NUP program index 0: booting the Switch 1 program {:016X}{}",
+                 base_title_id,
+                 base_romfs_only ? " from the base package (the update ExeFS is not packed)" : "");
+    }
 
     if (update_index) {
         const auto& update = nup->GetPackages()[*update_index];
@@ -211,6 +255,12 @@ AppLoader::LoadResult AppLoader_NUP::Load(Kernel::KProcess& process, Core::Syste
     }
     for (auto& [id, romfs] : nup->GetSiblingProgramRomFS()) {
         boot_content.push_back({id, FileSys::ContentRecordType::Program, std::move(romfs)});
+    }
+    if (edition_romfs != nullptr) {
+        if (auto legacy = MergedLegacyRomFS()) {
+            boot_content.push_back({FileSys::GetBaseTitleIDWithProgramIndex(base_title_id, 0),
+                                    FileSys::ContentRecordType::Program, std::move(legacy)});
+        }
     }
     FileSys::SetBootContent(std::move(boot_content));
 
@@ -296,14 +346,20 @@ std::vector<FileSys::Patch> AppLoader_NUP::ReadEmbeddedPatches() const {
     return patches;
 }
 
-ResultStatus AppLoader_NUP::ReadRomFS(FileSys::VirtualFile& out_file) {
+FileSys::VirtualDir AppLoader_NUP::MergedLegacyRomFS() {
     const auto base_index = nup->FindBasePackage();
     const auto base_romfs = base_index ? nup->GetRomFSDir(*base_index) : FileSys::VirtualDir{};
-    const auto update_romfs =
-        update_index ? nup->GetRomFSDir(*update_index) : FileSys::VirtualDir{};
+    const auto update_romfs = update_index && !base_romfs_only ? nup->GetRomFSDir(*update_index)
+                                                               : FileSys::VirtualDir{};
     // A standalone update carries the complete merged tree; a base+update pair
     // overlays the update onto the base (SPEC §4.1.4).
-    const auto merged = FileSys::NupContainer::MergeShadowDirs(base_romfs, update_romfs);
+    return FileSys::NupContainer::MergeShadowDirs(base_romfs, update_romfs);
+}
+
+ResultStatus AppLoader_NUP::ReadRomFS(FileSys::VirtualFile& out_file) {
+    // A Switch 2 Edition program sees only its own RomFS, as on hardware: games probe it to
+    // decide whether to mount program 0 and the upgrade pack (Super Mario Bros. Wonder).
+    const auto merged = edition_romfs != nullptr ? edition_romfs : MergedLegacyRomFS();
     if (merged == nullptr) {
         return ResultStatus::ErrorNoRomFS;
     }
