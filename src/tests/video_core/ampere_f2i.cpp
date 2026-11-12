@@ -847,7 +847,7 @@ TEST_CASE("Ampere Yoshi I2F preserves half result and integer source width",
             REQUIRE(((word >> 10) & 3) == 2);
             REQUIRE(((word >> 13) & 1) == 1);
             REQUIRE(((word >> 39) & 3) == round);
-            REQUIRE(((word >> 20) & 255) == (uniform ? 245 : 0x1b));
+            REQUIRE(((word >> 20) & 255) == (uniform ? 245U : 0x1bU));
         }
     }
 }

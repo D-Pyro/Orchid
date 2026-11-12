@@ -12,7 +12,7 @@ namespace diag = VideoCommon::ComputeBindingDiagnostic;
 TEST_CASE("Compute binding trace selector is explicit and exact",
           "[video_core][compute_binding_trace]") {
     REQUIRE(diag::ParseSelector("9694a462ae7e186c") == 0x9694a462ae7e186cULL);
-    REQUIRE(diag::ParseSelector("0000000000000000") == 0);
+    REQUIRE(diag::ParseSelector("0000000000000000") == 0ULL);
     REQUIRE_FALSE(diag::ParseSelector("9694a462ae7e186"));
     REQUIRE_FALSE(diag::ParseSelector("0x9694a462ae7e186c"));
     REQUIRE_FALSE(diag::ParseSelector("9694a462ae7e186z"));
