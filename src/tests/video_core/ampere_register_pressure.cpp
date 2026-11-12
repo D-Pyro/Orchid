@@ -166,3 +166,10 @@ TEST_CASE("Ampere register shadowing covers SHF with a register, cbuf or uniform
     CheckShadowed({{0xe0e17a19, 0x00c00400, 0x00000eff, 0}}, {{16, 1}, {24, 1}, {64, 1}});
     CheckShadowed({{0xffe17c19, 0x06, 0x08011eea, 0}}, {{16, 1}, {24, 1}, {64, 1}});
 }
+
+TEST_CASE("Ampere register shadowing covers LOP3 with a cbuf or uniform B",
+          "[video_core][ampere][pressure]") {
+    // LOP3.LUT R217, R226, c[0x3][0x10] / UR4, R228, 0xc0.
+    CheckShadowed({{0xe2d97a12, 0x00c00400, 0x078ec0e4, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+    CheckShadowed({{0xe2d97c12, 0x04, 0x0f8ec0e4, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+}
