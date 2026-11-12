@@ -525,8 +525,8 @@ TEST_CASE("Ampere uniform bindless TEX preserves scalar and pair result masks",
             auto code = sample;
             code[1].words[0] = (code[1].words[0] & ~0x00ff0000U) | (target << 16);
             code[1].words[2] = 0x0c9e00ffU | (mask << 8);
-            REQUIRE(static_cast<bool>(LowerToMaxwell(code)) ==
-                    (target < 216 && (mask == 1 || target == 214)));
+            // R216 and up is shadowed; a pair from R215 crosses into the uniform mirrors.
+            REQUIRE(static_cast<bool>(LowerToMaxwell(code)) == (mask == 1 || target != 215));
         }
         auto invalid_second = sample;
         invalid_second[1].words[2] = 0x0c9e0002U | (mask << 8);
@@ -642,21 +642,23 @@ TEST_CASE("Ampere uniform bindless TEX rejects unsupported texture modes",
 
 TEST_CASE("Ampere uniform bindless TEX protects uniform state and output pairs",
           "[video_core][ampere][bindless_tex]") {
+    // Odd pairs, a pair shared by both destinations and one crossing into R216 stay rejected;
+    // registers from R216 up are shadowed (register_pressure.h).
     for (const u32 destination : {1U, 2U, 215U, 216U}) {
         auto code = sample;
         code[1].words[0] = (code[1].words[0] & ~0x00ff0000U) | (destination << 16);
-        REQUIRE_FALSE(static_cast<bool>(LowerToMaxwell(code)));
+        REQUIRE(static_cast<bool>(LowerToMaxwell(code)) == (destination == 216));
     }
     for (const u32 second_destination : {0U, 1U, 215U, 216U}) {
         auto code = sample;
         code[1].words[2] = (code[1].words[2] & ~0xffU) | second_destination;
-        REQUIRE_FALSE(static_cast<bool>(LowerToMaxwell(code)));
+        REQUIRE(static_cast<bool>(LowerToMaxwell(code)) == (second_destination == 216));
     }
     for (const u32 source_bit : {24U, 32U}) {
         auto code = sample;
         code[1].words[source_bit / 32] &= ~(255U << (source_bit % 32));
         code[1].words[source_bit / 32] |= 216U << (source_bit % 32);
-        REQUIRE_FALSE(static_cast<bool>(LowerToMaxwell(code)));
+        REQUIRE(static_cast<bool>(LowerToMaxwell(code)));
     }
     auto discarded = sample;
     discarded[1].words[0] |= 0x00ff0000U;

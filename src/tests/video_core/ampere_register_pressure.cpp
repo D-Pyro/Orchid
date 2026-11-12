@@ -291,3 +291,30 @@ TEST_CASE("Ampere register shadowing covers all three coordinates of a 3D SURED"
     REQUIRE_FALSE(static_cast<bool>(crossing));
     CHECK(crossing.error == "native register shadowing mode");
 }
+
+TEST_CASE("Ampere register shadowing covers TEX with a uniform handle",
+          "[video_core][ampere][pressure]") {
+    // TEX.LZ R224/R225 and R226/R227 from (R232, R236), handle UR4.
+    CheckShadowed({HandleShift, {{0xe8e07f60, 0x300004ec, 0x0c9e0fe2, 0}}, Exit}, 1,
+                  {{16, 2}, {24, 1}, {32, 1}, {64, 2}});
+    // TEX.LL ARRAY_2D: (layer, x) in R232/R233, (y, lod) in R236/R237.
+    CheckShadowed({HandleShift, {{0xe8e07f60, 0xb00004ec, 0x099e0fe2, 0}}, Exit}, 1,
+                  {{16, 2}, {24, 2}, {32, 2}, {64, 2}});
+
+    constexpr Instruction low{{0x08047f60, 0x30000410, 0x0c9e0f0a, 0}};
+    CheckSpan(low, 16, 2);
+    CheckSpan(low, 64, 2);
+    CheckSpan(With(low, 72, 7, 4), 64, 1);
+    CheckSpan(With(With(low, 72, 15, 4), 64, 255), 16, 2); // channels 3-4 are dropped
+    CheckSpan(With(low, 72, 1, 4), 16, 1);
+    CheckSpan(low, 24, 1);
+    CheckSpan(low, 32, 1);
+    const auto lod = With(low, 87, 3, 3);
+    CheckSpan(lod, 24, 2);
+    CheckSpan(lod, 32, 1);
+    CheckSpan(With(low, 78, 1, 1), 24, 2);
+    const auto volume = With(low, 61, 2, 3);
+    CheckSpan(volume, 24, 2);
+    CheckSpan(volume, 32, 1);
+    CheckSpan(With(volume, 87, 2, 3), 32, 2);
+}
