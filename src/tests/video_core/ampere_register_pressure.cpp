@@ -202,3 +202,79 @@ TEST_CASE("Ampere register shadowing covers ATOMG data and every TXD register",
         CheckSpan(With(With(base, 72, 1, 4), 64, 255), 16, 1);
     }
 }
+
+TEST_CASE("Ampere register shadowing covers SHFL, SUATOM, SUST and TLD4",
+          "[video_core][ampere][pressure]") {
+    // SHFL R225, R226, R228, 0x1f.
+    constexpr Instruction shuffle{{0xe2e17589, 0x001f00e4, 0x000e0000, 0}};
+    CheckShadowed(shuffle, {{16, 1}, {24, 1}, {32, 1}});
+    // SUATOM.D.2D R225, [R232], R228 and SUST.P.2D [R232], R228-R231 / SUST.BA.2D [R232], R228.
+    CheckShadowed({{0xe8e17593, 0x600000e4, 0x001ee000, 0}}, {{16, 1}, {24, 2}, {32, 1}});
+    CheckShadowed({{0xe8007b9b, 0x600000e4, 0x00100f00, 0}}, {{24, 2}, {32, 4}});
+    CheckShadowed({{0xe8007b9d, 0x600000e4, 0x0010a900, 0}}, {{24, 2}, {32, 1}});
+    // TLD4.2D R224/R225 and R218/R219 from R232, R228; then the uniform-handle TLD4 (0xf63).
+    constexpr Instruction gather{{0xe8e07b63, 0x200000e4, 0x000e0fda, 0}};
+    CheckShadowed(gather, {{16, 2}, {24, 1}, {32, 1}, {64, 2}});
+    CheckShadowed({{0xe9e07f63, 0x30000aec, 0x081e0fda, 0}}, {{16, 2}, {24, 1}, {32, 1}, {64, 2}});
+    // Only the register in bits 32-39 high: the shadowing check must look at it.
+    for (const Instruction instruction : {
+             Instruction{{0x08047589, 0x001f00e4, 0x000e0000, 0}},
+             Instruction{{0x08047593, 0x600000e4, 0x001ee000, 0}},
+             Instruction{{0x08007b9b, 0x600000e4, 0x00100f00, 0}},
+             Instruction{{0x08007b9d, 0x600000e4, 0x0010a900, 0}},
+             Instruction{{0x08047b63, 0x200000e4, 0x000e0f0a, 0}},
+             Instruction{{0x1d0c7f63, 0x30000aec, 0x081e0f14, 0}},
+         }) {
+        CheckShadowed(instruction, {{16, 1}, {32, 1}});
+    }
+
+    // Spans: SUATOM/SUST.P coordinates by dimension, SUST.P data by channel, TLD4 by layout.
+    for (const u32 opcode : {0x593U, 0xb9bU}) {
+        const auto base = With(Instruction{{0x08047000, 0x60000010, 0x00100100, 0}}, 0, opcode, 12);
+        for (const auto [dimension, count] : {std::array{0U, 1U}, std::array{1U, 1U},
+                                              std::array{3U, 2U}, std::array{4U, 3U},
+                                              std::array{5U, 3U}})
+            CheckSpan(With(base, 61, dimension, 3), 24, count);
+    }
+    CheckSpan(Instruction{{0x08007b9b, 0x60000010, 0x00100500, 0}}, 32, 2);
+    CheckSpan(Instruction{{0x08007b9d, 0x60000010, 0x0010a900, 0}}, 24, 2);
+    constexpr Instruction low{{0x08047b63, 0x20000010, 0x000e0f0a, 0}};
+    for (const u32 opcode : {0xb63U, 0xf63U}) {
+        const auto base = With(low, 0, opcode, 12);
+        CheckSpan(base, 16, 2);
+        CheckSpan(base, 64, 2);
+        CheckSpan(With(base, 72, 7, 4), 64, 1);
+        CheckSpan(With(base, 64, 255), 16, 4);
+        CheckSpan(base, 24, 1);
+        CheckSpan(With(base, 61, 5, 3), 24, 2);
+        CheckSpan(With(base, 76, 1, 2), 24, 2);
+    }
+    // .F16 packs two channels per register.
+    const auto half = With(low, 79, 1, 1);
+    CheckSpan(half, 16, 1);
+    CheckSpan(half, 64, 1);
+    CheckSpan(With(half, 64, 255), 16, 2);
+    // Per-tap offsets are proven by register number: never renamed.
+    CHECK_FALSE(PrepareRegisterPressure(With(gather, 76, 2, 2), 216, 180).valid);
+
+    // These lowerings stage through R250 and up: a span reaching it stays refused.
+    for (const Instruction instruction : {
+             Instruction{{0x08047589, 0x001f0010, 0x000e0000, 0}},
+             Instruction{{0x08047593, 0x60000010, 0x001ee000, 0}},
+             Instruction{{0x08007b9b, 0x60000010, 0x00100100, 0}},
+             Instruction{{0x08007b9d, 0x60000010, 0x0010a900, 0}},
+             Instruction{{0x08047b63, 0x20000010, 0x000e0f0a, 0}},
+             Instruction{{0x1d0c7f63, 0x30000a10, 0x081e0f14, 0}},
+         }) {
+        CAPTURE(instruction.words);
+        CHECK(PrepareRegisterPressure(With(instruction, 32, 249), 216, 180).valid);
+        CHECK_FALSE(PrepareRegisterPressure(With(instruction, 32, 250), 216, 180).valid);
+    }
+    const auto staged = LowerToMaxwell(std::array{UniformMove, With(shuffle, 32, 250), Exit});
+    REQUIRE_FALSE(static_cast<bool>(staged));
+    CHECK(staged.error == "native register shadowing mode");
+    // Without the uniform bank a lane in R246 and up is lowering scratch.
+    const auto scratch = LowerToMaxwell(std::array{With(shuffle, 32, 246), Exit});
+    REQUIRE_FALSE(static_cast<bool>(scratch));
+    CHECK(scratch.error == "native program uses lowering scratch registers");
+}

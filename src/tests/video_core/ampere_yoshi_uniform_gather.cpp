@@ -153,11 +153,11 @@ TEST_CASE("Uniform gathers reject unverified modes and register ranges",
     for (const u32 bit : {16U, 24U, 32U, 64U}) {
         auto boundary = Captured[0];
         // A split two-register destination starting at215 would clobber UR0 at216.
-        // Coordinate sources at216 are reserved even if other operands are low.
+        // Coordinate sources at216 are shadowed (register_pressure.h).
         const u32 reg = bit == 16 || bit == 64 ? 215 : 216;
         boundary.words[bit / 32] = (boundary.words[bit / 32] & ~(255U << (bit % 32))) |
                                     (reg << (bit % 32));
-        CHECK_FALSE(Ampere::LowerToMaxwell(std::array{boundary, Exit}));
+        CHECK(static_cast<bool>(Ampere::LowerToMaxwell(std::array{boundary, Exit})) == (reg == 216));
     }
 }
 
@@ -219,10 +219,11 @@ TEST_CASE("Yoshi captured uniform array gather preserves layer and coordinate or
 TEST_CASE("Uniform array gather retains coordinate pair and mode bounds",
           "[video_core][yoshi_gather]") {
     const Instruction captured{{0x2c2e7f63, 0xb0000820, 0x0c1e0f2c, 0x000f4200}};
+    // The pair from R216 is shadowed; one crossing into R216 or reaching scratch is not.
     for (const u32 ra : {215U, 216U, 254U, 255U}) {
         auto invalid = captured;
         invalid.words[0] = (invalid.words[0] & 0x00ffffffU) | (ra << 24);
-        CHECK_FALSE(Ampere::LowerToMaxwell(std::array{invalid, Exit}));
+        CHECK(static_cast<bool>(Ampere::LowerToMaxwell(std::array{invalid, Exit})) == (ra == 216));
     }
     for (const auto [word, bit] : std::array{
              std::pair{1U, 29U}, std::pair{1U, 30U}, std::pair{2U, 12U},
@@ -276,7 +277,7 @@ TEST_CASE("Captured uniform AOFFI gather decodes signed offsets after the handle
     for (const u32 ra : {215U, 216U, 254U}) {
         auto invalid = captured;
         invalid.words[0] = (invalid.words[0] & 0x00ffffffU) | (ra << 24);
-        CHECK_FALSE(Ampere::LowerToMaxwell(std::array{invalid, Exit}));
+        CHECK(static_cast<bool>(Ampere::LowerToMaxwell(std::array{invalid, Exit})) == (ra == 216));
     }
     // PTP, invalid offset mode and array AOFFI remain outside the verified operand layout.
     for (const u32 mode : {2U, 3U}) {
