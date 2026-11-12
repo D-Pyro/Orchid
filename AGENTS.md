@@ -145,10 +145,13 @@ It runs on the maintainer's ChatGPT subscription and spares the Claude limits. N
   | Hyrule Warriors: Age of Imprisonment | `hw-blur-mission-20261106` (2x; the gate overrides to 1x) | `hw-mission-v2` (long: `route_start`) | mission, objective text checkpoint |
   | Star Fox | `starfox-tutorial-controls-loop-20261107` | `starfox-flight-v3` | flight tutorial, Arwing controllable |
   | Kirby and the Forgotten Land | `kirby-leon-dlc-20261110` | `kirby-stage-v2` | stage "Meteor Shower's Arrival" (no HUD at full health: checkpoint on the mission screen before, confirm on the screenshot) |
-  | Orbitals | `initial` | none: wait 60 s, then A, DDOWN x3, A, A, A, A (2 s apart), accept the EULA | main menu |
+  | Orbitals | `initial`, boot with `settings={"player_1_connected":"true"}` (co-op: needs a second controller) | `orbitals-gameplay-v2` | ship interior, both characters controllable |
+  | Xenoblade Chronicles: Definitive Edition | `xbde-leon-20261112` (no save: New Game) | `xbde-battle-v2` | prologue battle |
+  | Xenoblade Chronicles 2 | `xb2-leon-20261112` (no save: New Game) | `xb2-field-v2` | first battle, Rex controllable |
+  | Xenoblade Chronicles X: Definitive Edition | `xbx-leon-20261112` (the maintainer's save) | `xbx-field-v2-a` | field, minimap HUD |
 
-  All but Orbitals are registered for the gate (`gate_list`). Kirby Air Riders has no route on
-  purpose: its races can hang the GPU (README: do not play).
+  All twelve are registered for the gate (`gate_list`). Kirby Air Riders has no route on purpose:
+  its races can hang the GPU (README: do not play).
 
 - Routes should wait for screens, not for seconds: `wait_checkpoint(name, buttons=..)` waits until
   a recorded screen region appears (optionally pressing a button meanwhile) and is saved into the
@@ -158,8 +161,17 @@ It runs on the maintainer's ChatGPT subscription and spares the Claude limits. N
   screen came ("closest rmse 0.090, limit 0.08"): close = limit too strict or another build's
   picture, far = wrong scene.
 - Checkpoints: region on HUD that only exists in that scene, at most 120000 px (then the picture
-  may sit up to 8 px elsewhere, which it does between builds), `max_rmse` about 0.12, recorded on
-  the current build and checked twice. `checkpoint_list` shows which are usable.
+  may sit up to 8 px elsewhere, which it does between builds), `max_rmse` 0.12 for opaque HUD and
+  0.2 for text on a translucent bar over the 3D scene, recorded on the current build and checked
+  twice. HUD that hides at times (between tennis points) needs a wait, not one look.
+  `checkpoint_list` shows which are usable.
+- Recording a route: explore first, then a clean boot with only the needed steps, then
+  `route_save` (it keeps the time between your steps as waits, so do nothing extra in that boot),
+  then replay from a fresh boot. If the run that found the way is already stopped,
+  `route_from_run(name, run_id, final_checkpoint=..)` builds the route from its input log. Routes
+  longer than 240 s replay with `route_start` (a job). Brief for a subagent: the template
+  `~/.local/share/codex-orchid-mcp/briefs/record-route.md` plus the game's details, one game per
+  brief; several games in one brief ended early every time (2026-11-11).
 - Every `boot` should pass `bin=<build under test>`; without it the harness's stored default build
   runs and the reply says so. `default_binary_set` replaces the default (the last good build).
   `queue_s=240` waits for the GPU test lock instead of failing while another agent tests (call
