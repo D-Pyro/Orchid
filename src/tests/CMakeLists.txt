@@ -133,6 +133,7 @@ add_executable(tests
     video_core/ampere_release_f2i.cpp
     video_core/ampere_uniform_immediate_shift.cpp
     video_core/ampere_bindless_surfaces.cpp
+    video_core/ampere_kirby_fsel.cpp
     video_core/ampere_register_pressure.cpp
     video_core/syncpoint_manager.cpp
     video_core/native_macro_fifo.cpp

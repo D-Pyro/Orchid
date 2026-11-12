@@ -74,6 +74,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
     case 0x803: // P2R: Rd and the merge source Ra
     case 0x807:
     case 0x808:
+    case 0xc08: // FSEL with a uniform B
     case 0x809: // FMNMX: B is an immediate, cbuf or uniform register, never a GPR
     case 0xa09:
     case 0xc09:
