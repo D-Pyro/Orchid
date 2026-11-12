@@ -319,6 +319,11 @@ bool BufferCache<P>::DMACopy(GPUVAddr src_address, GPUVAddr dest_address, u64 am
 
     ClearDownload(*cpu_dest_address, amount);
     MarkVertexBuffersStale(*cpu_dest_address, amount);
+    // Guest memory gets the copy below (the scoped write at the end), which holds every byte the
+    // source has in guest memory: command list pages in the destination read those from it, and
+    // their copies are stale (zortos293/Lichii#805 34656e8225). The bytes copied from GPU-written
+    // source ranges are noted as GPU writes after this.
+    Nx2NoteListHostWrite(*cpu_dest_address, amount);
 
     BufferId buffer_a;
     BufferId buffer_b;
@@ -387,14 +392,19 @@ bool BufferCache<P>::DMAClear(GPUVAddr dst_address, u64 amount, u32 value) {
     if (!cpu_dst_address) {
         return false;
     }
-    const bool dest_dirty = IsRegionRegistered(*cpu_dst_address, amount);
+    // `amount` counts words: the check looked at a quarter of the range (zortos293/Lichii#805
+    // 34656e8225).
+    const size_t size = amount * sizeof(u32);
+    const bool dest_dirty = IsRegionRegistered(*cpu_dst_address, size);
     if (!dest_dirty) {
         return false;
     }
 
-    const size_t size = amount * sizeof(u32);
     ClearDownload(*cpu_dst_address, size);
     gpu_modified_ranges.Subtract(*cpu_dst_address, size);
+    // The caller writes the cleared words to guest memory after this, as an inline write: command
+    // list pages read them from guest memory, and their copies are stale.
+    Nx2NoteListHostWrite(*cpu_dst_address, size);
 
     const BufferId buffer = FindBuffer(*cpu_dst_address, static_cast<u32>(size), false);
     Buffer& dest_buffer = slot_buffers[buffer];
