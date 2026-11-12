@@ -39,6 +39,11 @@ MultiLevelPageTable<BaseAddr>::MultiLevelPageTable(std::size_t address_space_bit
 
 template <typename BaseAddr>
 MultiLevelPageTable<BaseAddr>::~MultiLevelPageTable() noexcept {
+    Release();
+}
+
+template <typename BaseAddr>
+void MultiLevelPageTable<BaseAddr>::Release() noexcept {
     if (!base_ptr) {
         return;
     }
