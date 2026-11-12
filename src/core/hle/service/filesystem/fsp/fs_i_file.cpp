@@ -33,6 +33,8 @@ Result IFile::Read(
     LOG_DEBUG(Service_FS, "called, option={}, offset={:#x}, length={}", option.value, offset,
               size);
 
+    R_UNLESS(size >= 0 && static_cast<u64>(size) <= out_buffer.size(), FileSys::ResultInvalidSize);
+
     // Read the data from the Storage backend
     R_RETURN(
         backend->Read(reinterpret_cast<size_t*>(out_size.Get()), offset, out_buffer.data(), size));
@@ -43,6 +45,8 @@ Result IFile::Write(
     FileSys::WriteOption option, s64 offset, s64 size) {
     LOG_DEBUG(Service_FS, "called, option={}, offset={:#x}, length={}", option.value, offset,
               size);
+
+    R_UNLESS(size >= 0 && static_cast<u64>(size) <= buffer.size(), FileSys::ResultInvalidSize);
 
     R_RETURN(backend->Write(offset, buffer.data(), size, option));
 }
