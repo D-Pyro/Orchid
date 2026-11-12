@@ -108,7 +108,10 @@ TEST_CASE("ADPCM wave buffers decode to the reference decoder's samples", "[audi
     };
     auto& table = process.GetPageTable().GetImpl();
     table.Resize(20, 12);
-    auto* page = system.DeviceMemory().buffer.BackingBasePointer() + 0x10000;
+    constexpr std::size_t BackingOffset = 0x10000;
+    // DeviceMemory uses deferred backing; commit before the test writes through the host pointer.
+    system.DeviceMemory().buffer.ClearBackingRegion(BackingOffset, 0x1000, 0);
+    auto* page = system.DeviceMemory().buffer.BackingBasePointer() + BackingOffset;
     std::memset(page, 0, 0x1000);
     table.entries.GetAndFault(Base >> 12)
         .Store(false, Common::PageType::Memory, 1, reinterpret_cast<uintptr_t>(page) - Base);
@@ -118,8 +121,10 @@ TEST_CASE("ADPCM wave buffers decode to the reference decoder's samples", "[audi
     const auto frames = MakeFrames();
     std::memcpy(page, frames.data(), frames.size());
     std::memcpy(page + (CoefficientAddress - Base), Coefficients.data(), sizeof(Coefficients));
+    system.DeviceMemory().buffer.MarkDirty(BackingOffset, 0x1000);
     const auto place_context = [&](const AdpcmContext& context) {
         std::memcpy(page + (ContextAddress - Base), &context, sizeof(context));
+        system.DeviceMemory().buffer.MarkDirty(BackingOffset, 0x1000);
     };
 
     AudioCore::Renderer::VoiceState voice{};

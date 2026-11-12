@@ -3,6 +3,7 @@
 
 #include <array>
 #include <limits>
+#include <memory>
 #include <catch2/catch_test_macros.hpp>
 #include "audio_core/sink/sink_stream.h"
 #include "common/scope_exit.h"
@@ -107,27 +108,29 @@ TEST_CASE("Sysmix six-channel PCM reaches the sink and stereo downmix", "[sysmix
     Settings::values.volume.SetValue(100);
     Settings::values.audio_muted.SetValue(false);
     for (u32 output_channels : {2U, 6U}) {
-        TestSinkStream sink{system, 6, output_channels};
+        // SinkStream owns fixed 0x10000-entry sample and buffer queues. Keep it off the small
+        // Windows test-thread stack.
+        auto sink = std::make_unique<TestSinkStream>(system, 6, output_channels);
         const std::array<s16, 6> source{1000, 2000, 3000, 4000, 5000, 6000};
         const auto raw = std::span{reinterpret_cast<const u8*>(source.data()), sizeof(source)};
         auto samples = ConvertPcm(raw, false, 1.0f);
         AudioCore::Sink::SinkBuffer buffer{1, 0, 0, false};
-        sink.AppendBuffer(buffer, samples);
-        REQUIRE(sink.GetQueueSize() == 1);
-        const auto result = sink.TakeSamples();
+        sink->AppendBuffer(buffer, samples);
+        REQUIRE(sink->GetQueueSize() == 1);
+        const auto result = sink->TakeSamples();
         if (output_channels == 6) {
             REQUIRE(result == std::vector<s16>(source.begin(), source.end()));
         } else {
             // SinkStream's established coefficients: front + .596 center + .354 LFE + .707 rear.
             REQUIRE(result == std::vector<s16>{7739, 9446});
         }
-        sink.ClearQueue();
-        REQUIRE(sink.GetQueueSize() == 0);
+        sink->ClearQueue();
+        REQUIRE(sink->GetQueueSize() == 0);
         for (s16 full_scale : {s16{32767}, s16{-32768}}) {
             std::vector<s16> loud(6, full_scale);
-            sink.AppendBuffer(buffer, loud);
-            REQUIRE(sink.TakeSamples() == std::vector<s16>(output_channels, full_scale));
-            sink.ClearQueue();
+            sink->AppendBuffer(buffer, loud);
+            REQUIRE(sink->TakeSamples() == std::vector<s16>(output_channels, full_scale));
+            sink->ClearQueue();
         }
     }
 }

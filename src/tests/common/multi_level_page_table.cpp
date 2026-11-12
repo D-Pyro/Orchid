@@ -79,6 +79,7 @@ TEST_CASE("Page table assigned over releases the mapping it had", "[common][page
 
 TEST_CASE("Page table keeps its mapping through a move", "[common][page_table]") {
     auto first = MakeTable();
+    first.ReserveRange(0, sizeof(u32) * 4);
     first[3] = 5;
 
     Table second{std::move(first)};
