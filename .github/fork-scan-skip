@@ -335,3 +335,544 @@ c940c0929 Dimiduh/Lichii: release workflow update only
 d06ea45b0 vouion/Lichii: sysmix counters and clock logs are diagnostics; audio behavior is unchanged
 d4e0bcf18 Deidakom/Peachy: README rebrand only
 e0d911b28 Hydro74000/Edlws: logo replacement only
+# Full scan 2026-11-11 (triaged by diff; details in the maintainer's all-verdicts.md)
+0fff860be zortos293/Eglantine: main already separates managers by TranslationIdentity
+3ef9eb58a zortos293/Eglantine: main waits on PendingSemaphoreRelease in CanResumeAcquire instead
+059e931f6 Deathnetworks/Lichii: pipeline build failures in main are deterministic (rejected shader); retrying only repeats the cost
+809fb3aa3 zortos293/Eglantine: main rechecks rejections (RecheckRejection) in ComputeShader, the shortcut does not fit
+c26feaa7c krim404/Lichii: MakeShaderTranslationKey in main has no environments to read the stage from
+56f346b75 Jermzxxx/switch2deez: changes pipeline keys (one-time cache miss) for a small gain
+ac5824eee vv4k4l/Eglantine: main already skips corrupt draw counts (vk_rasterizer.cpp); the Pokopia shadow-cascade skip changes the picture
+5d73f1405 elkarbeenus/Lichii_improvments_ram: robustBufferAccess2 costs GPU time on every storage access; the bounds-checked stores came in with 741ee49a9
+a54c3eaaf QuincyForbes/Lichii: does not fit main's scratch handling; small memory gain
+d5bb40ad4 zortos293/Eglantine: not for Orchid: feature not needed for supported games (single-player harness); large new subsystem
+4d884cbb5 zortos293/Eglantine: not for Orchid: NX packaging/UI/CMake; not emulation correctness for supported games
+121e5c04a zortos293/Eglantine: already in main: src/shader_recompiler/frontend/ampere/lower_to_maxwell.h:1672-1678 already matches the compare through any UPn ("through any UPn")
+4f3f9fe62 zortos293/Eglantine: already in main: Orchid is the source (commit says "from Orchid"): geometry_exit.h:174-181 (ALD/OUT), lower_to_maxwell.h:1286 (SURED 3D), :1730 (LDG load predicate), ...
+23a6a56c6 zortos293/Eglantine: not for Orchid: Windows-only debug sampler (CreateToolhelp32Snapshot)
+32ba5b4a2 zortos293/Eglantine: not for Orchid: gated on EDEN_NX2_APP_POOL_PROBE / that title's heap behaviour
+4e7d87aca zortos293/Eglantine: not for Orchid: UI/overlay, diagnostics only
+b4b830c8f zortos293/Eglantine: not for Orchid: grep for MaxBackedImageTexels/IsTooLargeToBack in Orchid src finds nothing: the unbacked-image fallback code does not exist in Orchid
+43af97ffa zortos293/Eglantine: already in main: Orchid has all three equivalents: basic_block.h:195-197 (ssa_values array in blocks), ir/breadth_first_search.h:88 BreadthFirstSearchPruned, ...
+d42e90710 zortos293/Eglantine: not for Orchid: Orchid buffer_cache.h:2971-3002 uses a different StorageBufferSizeLimit/StorageBufferMappedPrefix path, the patched reads_size_word code (and the 1 ...
+0490f57b9 zortos293/Eglantine: not for Orchid: new presentation feature (841 lines, FSR3/DLSS-adjacent present code), not a correctness/perf fix for supported games
+babdb6bb7 zortos293/Eglantine: not for Orchid: logging-only, Windows-oriented
+bc3d0e394 zortos293/Eglantine: not for Orchid: other game's DLSS stand-in, not in Orchid
+f6bbee241 zortos293/Eglantine: not for Orchid: gated on another game
+12062785e zortos293/Eglantine: not for Orchid: gated on OoT code addresses (patch_manager.cpp)
+290da9e8a zortos293/Eglantine: not for Orchid: fork branding/profile UI
+40af7f14f zortos293/Eglantine: not for Orchid: DLSS not in Orchid
+017c82c29 zortos293/Eglantine: not for Orchid: Orchid fermi_2d.cpp:91 only logs UNIMPLEMENTED; justification is Duskbloods grading table only
+fd1dbecca zortos293/Eglantine: not for Orchid: Orchid sink_stream.cpp has no TryAppendOutputBlock/Sysmix queue (grep empty), patched code absent
+80197189d zortos293/Eglantine: already in main: Orchid vulkan_memory_allocator.cpp:479-487 already retries into host memory on OUT_OF_DEVICE_MEMORY (only pressure_events counting missing, minor)
+9703d5e29 zortos293/Eglantine: not for Orchid: Linux GCC already correct (ips_layer.cpp:131), MSVC only
+75b11063a zortos293/Eglantine: not for Orchid: both files absent in Orchid
+2aa201ac5 zortos293/Eglantine: not for Orchid: DLSS not in Orchid
+e8be28e5d zortos293/Eglantine: not for Orchid: Orchid buffer_cache.h has no native_pointer/table_pointer classification (grep empty), patched code absent
+093e264c8 zortos293/Eglantine: not for Orchid: build warning only
+ddd19a170 zortos293/Eglantine: not for Orchid: Windows-only (GetSystemCommitRoom returns nullopt elsewhere)
+610bd0873 zortos293/Eglantine: not for Orchid: MSVC/build only
+467e77241 zortos293/Eglantine: not for Orchid: UI
+536853e71 zortos293/Eglantine: not for Orchid: OoT damaged dump workaround
+d2eaae4f3 zortos293/Eglantine: not for Orchid: Orchid has EvictUnusedPipelines (vk_pipeline_cache.cpp:1181) but no MappedStoragePointerKeys, patched mechanism absent
+ffb12c4fa zortos293/Eglantine: not for Orchid: logging/docs, Windows commit limit
+372b8d706 zortos293/Eglantine: not for Orchid: CMakeModules/NxFormat.cmake absent in Orchid
+e7801ece7 zortos293/Eglantine: not for Orchid: DLSS not in Orchid
+1c83548eb zortos293/Eglantine: not for Orchid: file absent in Orchid
+7afad5494 zortos293/Eglantine: not for Orchid: feature absent in Orchid (no FSR code), Ocarina-only
+6cec8cb9a zortos293/Eglantine: not for Orchid: FSR absent in Orchid
+c215653cc zortos293/Eglantine: not for Orchid: FSR absent in Orchid
+111d0c6ef zortos293/Eglantine: not for Orchid: Orchid has no nx2_stutter_trace at all; logging/diagnostic only
+986a2b684 zortos293/Eglantine: not for Orchid: diagnostics only, off unless env var set; Orchid has video_core/nx2_profile.h and common/spin_recursive_mutex.h (LockContended at :31) as base
+b9bb5a099 zortos293/Eglantine: not for Orchid: Orchid common/thread.cpp:665-749 the MWAITX/UMWAIT path is under _WIN32, Linux is already a condvar wait; commit's non-Windows path is a no-op
+0888d49a2 zortos293/Eglantine: not for Orchid: library/loader feature of Lichii, not emulation correctness; 2935 added lines, new external package
+2b30c2cb1 zortos293/Eglantine: not for Orchid: whole function body under #ifdef _WIN32 (else returns {0,0}); Linux/Orchid has hole punching in host_memory.cpp ClearBackingRegion
+9d8fa87d1 zortos293/Eglantine: not for Orchid: logging/diagnostics and tooling only, off by default
+b29ef4b58 zortos293/Eglantine: not for Orchid: logging/diagnostic only, nothing functional
+cbb512ee7 zortos293/Eglantine: not for Orchid: Orchid has no GetSubmappedDeviceRange (grep empty in src/video_core/memory_manager.cpp), macOS only
+1c25fbdfb zortos293/Eglantine: not for Orchid: Orchid has no fast draw / ResolveMemoizedTextures / TakeReusableDraw (no FAST_DRAW in src); only meaningful together with c7e807d617
+a957980a4 zortos293/Eglantine: not for Orchid: Orchid never had the cap (ffmpeg.cpp:285 thread_count=0, nx2_video_decoder.cpp has no Dav1dThreads); net HAVE
+c2e293ec8 zortos293/Eglantine: not for Orchid: Orchid has no ResolveMemoizedTextures/texture memo (grep empty in texture_cache.h)
+bbf3e6297 zortos293/Eglantine: not for Orchid: Orchid has no nx2_sysmix.cpp and device_session.cpp:52 never fails on input stream readiness, so no failing path to fix
+ad477ef1f zortos293/Eglantine: not for Orchid: Orchid has no shader_warm/precache builder (no src/video_core/shader_warm, no WalkArchive)
+89fecaa57 zortos293/Eglantine: not for Orchid: Orchid's nx2_gsv.h SubmitInput (2677-2700) just queues every packet, no busy refusal, no m_clock_offset/AnchorClock/nx2_video_input_queue.h, so ...
+cc3bfb931 zortos293/Eglantine: not for Orchid: Ocarina NSO patch bytes (patch_manager.cpp) and settings UI; not a supported game
+5ba52f772 zortos293/Eglantine: not for Orchid: Orchid has no FrontSkipsLoopWrite/FrontState/sink_pending/GpuSplit::Starts (grep of maxwell_3d.cpp and gpu_split.h empty); the optimisation it guards ...
+673783fa6 zortos293/Eglantine: not for Orchid: Orchid still has the old is_synced path (query_cache.h:275-340, fence_manager.h:94) but gpu_accuracy defaults to High on desktop (settings.h:517) so ...
+5acbea8f0 zortos293/Eglantine: not for Orchid: Both hooks gated on exact MKW native program keys (mkw_wave_workaround.h, vk_rasterizer.cpp publish_collision_map); not a supported game
+d3cbd3b29 zortos293/Eglantine: not for Orchid: nx2_gsv.h exists in Orchid but has no decoder_mutex/pitch_frame/Nx2RelayoutDecoderImage (grep empty); symptom only Welcome Tour clip, no supported ...
+aae0b063f zortos293/Eglantine: not for Orchid: gated on VideoCommon::OotNetwork::ProgramId in the diff itself
+501024712 zortos293/Eglantine: not for Orchid: Orchid src/core/loader/nup.cpp:70-80 has the same code being patched; only a title/library-name cosmetic
+df04252d4 zortos293/Eglantine: not for Orchid: diagnostics-only; Orchid dma_pusher.cpp:785 and maxwell_3d.cpp:474 still use the statics
+c0f809842 zortos293/Eglantine: not for Orchid: Orchid nx2_gsv.h:1499 already has vi2 201 RegisterClientState; nifm.cpp:1136 has no cmd 101 and no StubReplyZeroed in nifm, but only OoT is reported ...
+88783d558 zortos293/Eglantine: not for Orchid: Orchid vk_query_cache.cpp has no size_slots > BANK_SIZE bound at all (grep only finds size_slots > 1 at :298), so the code being tuned does not exist
+7d3b3a526 zortos293/Eglantine: not for Orchid: Orchid vk_pipeline_cache.cpp has no mesh_emulation (grep empty), mesh_fallback_limits.h absent: feature not in Orchid
+e39218a30 zortos293/Eglantine: not for Orchid: Orchid vulkan_device.cpp has no GetCooperativeMatrixPropertiesKHR (grep empty); code patched does not exist
+e7e5fef1f zortos293/Eglantine: not for Orchid: env-override debug path only; Orchid texture_cache.h:274-279 has overrides but Orchid's threshold logic differs and no game relies on them
+59514b196 zortos293/Eglantine: not for Orchid: Windows CpuSets code in src/common/thread.cpp, Linux unaffected
+66dc4742e zortos293/Eglantine: not for Orchid: Orchid has no DefineCooperativeHmmaTypes (grep empty)
+52f3b067a zortos293/Eglantine: not for Orchid: Orchid has no src/video_core/pipeline_cache_files.h nor VulkanPipelineCacheVersion (grep empty); different cache design
+941c0270f zortos293/Eglantine: not for Orchid: OoT network bypass; not in Orchid
+e532eab7e zortos293/Eglantine: not for Orchid: Windows-only code path
+4c63e74e1 zortos293/Eglantine: already in main: Orchid lower_to_maxwell.h:2267-2279 (case 0xb63, bit 79 F16 branch) already packs by popcount(mask) with RZ for the odd tap and does not require mask ...
+12fc47e8a zortos293/Eglantine: already in main: Orchid dma_pusher.h:342-345 has ib_enable/dma_increment_once/signal_sync as 1-bit fields but synced (written by the fence callback, ...
+ce9be9d14 zortos293/Eglantine: not for Orchid: Orchid has no src/video_core/gpu_timestamp.h (ls fails) so the patched ReadGpuTimestamp does not exist; only affects dynamic-resolution tuning via a ...
+89440b29a zortos293/Eglantine: not for Orchid: Orchid vulkan_device.cpp has only the generic cooperative_matrix feature query (:1201) and no 16x16x16 shape path; RX 9070 XT (RDNA4, RADV) is on the ...
+f96cded33 zortos293/Eglantine: not for Orchid: gated on OoT shader hashes/program id (oot_network.h), setting UI; not in Orchid
+b7ff181f2 zortos293/Eglantine: not for Orchid: Orchid has no mesh_emulation (vk_pipeline_cache.cpp grep empty); RX 9070 XT supports VK_EXT_mesh_shader so fallback never runs for Leon; fork itself ...
+65e979adb zortos293/Eglantine: not for Orchid: Orchid has no vk_streamline_dlss/ocarina motion code (grep src/video_core finds no dlss files); Ocarina-only
+95df0bc79 zortos293/Eglantine: not for Orchid: LSFG (video_core/frame_gen) exists in Orchid but is a presentation feature, not a game fix
+a195b27ff zortos293/Eglantine: not for Orchid: Orchid has no DefineSoftwareMatrixFunctions; its emit_spirv_tensor.cpp:30-77 is an older fully unrolled shuffle version; patch cannot apply; revisit ...
+760183a2a zortos293/Eglantine: not for Orchid: Orchid patch_manager.cpp has only Wonder fps patch (l.434-490), no DYNAMIC_FPS_ROUTINE
+168601328 zortos293/Eglantine: not for Orchid: Orchid has no nx2_sysmix.cpp; its sysmix is in nx2_audio_device_manager.h Drain() (l.489-534) which never pads with silence, it just feeds taken ...
+b6d3a82ee zortos293/Eglantine: already in main: Orchid vk_update_descriptor.cpp:55-65 already doubles frame_payload_size up to max_frame_payload_size with a log
+cd5d9c233 zortos293/Eglantine: not for Orchid: Orchid has no PinCurrentThread/PinnedRole/pin_gpu_threads at all (grep src finds nothing), so this extends a feature Orchid lacks; experimental and ...
+2c99d449e zortos293/Eglantine: not for Orchid: Orchid nx2_gsv.h:1751 PaceToVblank(timing) only paces to the game's vblank and speed limit; this is a new user setting, not a fix for a supported game
+f47290153 zortos293/Eglantine: not for Orchid: Entire code is inside #ifdef _WIN32 (vulkan_library.cpp); Orchid targets Linux here
+7551e79aa zortos293/Eglantine: already in main: Orchid core/loader/nso.cpp:138-148 already returns nullopt on result<0 or size mismatch with a log; PGO flag is aarch64-only
+b83cd6e0b zortos293/Eglantine: not for Orchid: frame generation not in Orchid; UI only
+a835cdba2 zortos293/Eglantine: not for Orchid: build/CI only
+b72195422 zortos293/Eglantine: not for Orchid: Orchid buffer_cache.h has no table_pointer concept in StorageBufferBinding (grep table_pointer: none); only 64_MiB at :1938 is vertex-buffer code; ...
+e7a6a819a zortos293/Eglantine: not for Orchid: logging-only
+ac4ed63ad zortos293/Eglantine: not for Orchid: updater/UI
+1d86dd61e zortos293/Eglantine: not for Orchid: feature/UI; none of the supported games needs mic as boot blocker (not verified)
+146705185 zortos293/Eglantine: not for Orchid: NUP tooling, no emulation
+ec1c165fb zortos293/Eglantine: not for Orchid: Orchid core.cpp has no "Host clock" log line; ARM build fix
+6bb54dd86 zortos293/Eglantine: already in main: Orchid usage_tracker.h:105-111 already uses PageMask(offset,size) helper
+80e0d4f06 zortos293/Eglantine: not for Orchid: logging only (Orchid has the skip at vk_pipeline_cache.cpp:1392)
+5637cf1c4 zortos293/Eglantine: not for Orchid: Orchid has no debug_stats flag; created_shapes (texture_cache.h:2902) is inserted per image creation but cleared every 600 frames (:468), so no leak, ...
+8f8081658 zortos293/Eglantine: not for Orchid: Windows CPU sets only, skipped on non-Windows hosts; UI setting
+1d7fe9b7d zortos293/Eglantine: not for Orchid: debugging tooling only
+ed3246c6f zortos293/Eglantine: not for Orchid: Windows/MSVC only
+5695c7719 zortos293/Eglantine: not for Orchid: Windows only
+f35b14aa1 zortos293/Eglantine: not for Orchid: Windows only
+3a43110bc zortos293/Eglantine: not for Orchid: Windows-only debugging tool
+c87f09a84 zortos293/Eglantine: not for Orchid: diagnostics only
+30ab5498e zortos293/Eglantine: not for Orchid: diagnostic only, no stream behaviour change
+d899218e1 zortos293/Eglantine: not for Orchid: logging only
+a08bf8f02 zortos293/Eglantine: not for Orchid: logging only
+7223507e4 zortos293/Eglantine: already in main: Orchid vk_graphics_pipeline.cpp:1152-1179 already chains subgroup_size_ci (gated by NeedsGraphicsSubgroupShuffleWorkaround, includes quad ...
+2ae4c3e40 zortos293/Eglantine: already in main: Orchid romfs_factory.cpp:113-126 has OpenBootContent fallback (equivalent)
+e0f967c2d zortos293/Eglantine: not for Orchid: not a perf/correctness fix for games, only OOM error path
+e26965ffe zortos293/Eglantine: not for Orchid: Orchid common_protocol.cpp:81 has old loop; input hardware only
+3420ca134 zortos293/Eglantine: not for Orchid: build warning only
+9fa4a71fa zortos293/Eglantine: not for Orchid: Windows-only
+79f284eab zortos293/Eglantine: not for Orchid: Orchid has no SubmitDeferredWork/DeferFlush (fence_manager.h:162-184, vk_scheduler.h), no FSR3 interpolation; RED/SURED part HAVE: ...
+e219d24c5 zortos293/Eglantine: not for Orchid: Windows/MinGW build only (cpmfile.json, externals/ffmpeg)
+4c173bb79 zortos293/Eglantine: not for Orchid: UI/Qt feature
+5a50f50e0 zortos293/Eglantine: not for Orchid: same type on Linux x86-64, no behavioural change
+55532f2d8 zortos293/Eglantine: not for Orchid: gated on OoT program id patch
+188ee5bcf Djihads80/Eglantine: not for Orchid: only MKW cache dir naming; Orchid has no such file
+184179248 Djihads80/Eglantine: would undo work in main: reverts the harden commit (geometry output pruning, own .mythos.bin cache names, query copy dedup, pass-through masks, vertex-stride dynamic state)
+a7c83d1c4 Djihads80/Eglantine: not for Orchid: vk_pipeline_cache.cpp:895 uses CreateDir only; nested dir only for MKW title id, others unaffected
+f35a6d3cc Djihads80/Eglantine: not for Orchid: MKW-only path
+45ad48059 Djihads80/Eglantine: not for Orchid: diff is formatting-only for buffer_cache.h/base.h/kepler_compute.h; MKW pacing only
+a61fb4154 Djihads80/Eglantine: not for Orchid: Orchid vk_pipeline_cache.cpp:1039 same code but the other `lock` names (947,1018) are scoped inside lambdas, no clash
+0e8205682 Djihads80/Eglantine: not for Orchid: depends on ff72fed972 and removed_conditional_barrier which Orchid lacks (grep empty); Orchid graphics path vk_graphics_pipeline.cpp:1174-1177 ...
+70a841058 Djihads80/Eglantine: not for Orchid: pure helper, includes removed_conditional_barrier absent in Orchid (shader_info.h)
+de4ed9d9d Djihads80/Eglantine: not for Orchid: Orchid has no table_budget/tables_seen in global_memory_to_storage_buffer_pass.cpp (grep empty); MAX_SSBOS=32 shader_info.h:273, compute mask u32 ...
+688c6fa7d Djihads80/Eglantine: not for Orchid: Orchid has no StoragePointerSlots/null_pointer_slots (grep empty); builds on pointer-slot tracking Orchid lacks
+39a33c4a7 Djihads80/Eglantine: not for Orchid: all hunks gated on 0x0400C3F00006E000 or mkw_wave_workaround.h
+a23be213d Djihads80/Eglantine: not for Orchid: gated on OcarinaOfTimeProgramId, Orchid has none (grep empty); Bananza already has the same rule
+92f119195 Djihads80/Eglantine: not for Orchid: gated on Ocarina's cbuf +0x58 layout, adds native_upscale.h
+7602efc51 Djihads80/Eglantine: not for Orchid: debugger/diagnostic feature, not a fix
+d52e5f103 Djihads80/Eglantine: not for Orchid: rationale is MSVC deque one-element blocks (Windows); Orchid Linux libstdc++ has 512 B blocks
+539b83020 Djihads80/Eglantine: already in main: romfs_factory.cpp:43-50 already runs PatchRomFS(nullptr, file...) for non-updatable RomFS (uncached, harmless)
+5d5fba1ca Djihads80/Eglantine: not for Orchid: texture_cache.h:274-280 override loop is an env-only debug knob; default thresholds untouched
+854b81b17 Djihads80/Eglantine: not for Orchid: env-forced interval + Ocarina cutscene videos only
+37a3ad3ad Djihads80/Eglantine: not for Orchid: that function does not exist in Orchid (grep empty); tested only on A770/MKW
+f9de7d855 Djihads80/Eglantine: not for Orchid: CanReadPipelineCacheDuringBuilds absent in Orchid; driver-specific
+70c22d141 Djihads80/Eglantine: already in main: vk_texture_cache.cpp:1453-1454 plane_aspect() already does it, :1576 CopyBufferToImage already TRANSFER_DST_OPTIMAL
+7f9eb7cc5 Djihads80/Eglantine: not for Orchid: gated on two Ocarina shader hashes and VK_DRIVER_ID_AMD_PROPRIETARY; has_broken_spirv_fragment_shuffle absent in Orchid, RADV on Linux unaffected
+33805757a Djihads80/Eglantine: not for Orchid: UI preset for another game
+d9330e37c Djihads80/Eglantine: not for Orchid: UI/preset for another game
+e87ad3106 Djihads80/Eglantine: would undo work in main: Revert of "StarFox compatibility update": removes nx2_hwacod.h (hwacod opus client cmd 100), sysmix PCM sink output, NSO loader change, Ampere ...
+edd84b756 Djihads80/Eglantine: would undo work in main: Revert of "reduce native readbacks and fix MKW pacing": reverts buffer_cache readback reductions and PaceToVblank process arg
+2c9263140 Djihads80/Eglantine: not for Orchid: dma_pusher.cpp:548 region, no behaviour change
+7b1aeff91 Djihads80/Eglantine: not for Orchid: needs IsMapPending which Orchid lacks (grep none)
+abb9ae842 Djihads80/Eglantine: already in main: Orchid src/video_core/nx2.h:53-67 already ORs a whole mask per word
+d713f4462 Djihads80/Eglantine: already in main: Orchid memory_manager.cpp:718-745 GetMemoryLayoutSize already has a thread_local interval cache invalidated by kind_generation (equivalent, safer)
+577892269 Djihads80/Eglantine: already in main: Orchid usage_tracker.h:96-112 PageMask already handles this
+551245497 Djihads80/Eglantine: not for Orchid: Another game's feature (kepler_compute DLSS-like stand-in), no supported game
+5e2cdc9f1 Djihads80/Eglantine: not for Orchid: Windows-only code path; Linux Event::WaitFor in Orchid uses condvar.wait_until (thread.cpp:767)
+687a4943e Djihads80/Eglantine: already in main: Orchid src/common/thread.cpp:665-700 already has the Windows consume_signal/clamped MWAITX and :767 wait_until(EventDeadline(time))
+8d356dfa5 Djihads80/Eglantine: not for Orchid: logging only (Orchid vk_rasterizer.cpp:337 has the older line)
+23457ccf7 Djihads80/Eglantine: not for Orchid: patched code absent in Orchid: no SetIdleHook/DeferFlush/FlushDeferred (grep), gpu_split.cpp:207 Drain has no back_quiet, buffer_cache.h has no ...
+993a31c59 Djihads80/Eglantine: already in main: Orchid emit_spirv_image.cpp:626 already has a dynamic-PTP per-tap gather (comment "TLD4.PTP offsets that are not constants"), warning path at :100 ...
+9b27d7eac Djihads80/Eglantine: already in main: Orchid lower_to_maxwell.h:1843-1858 already applies absolute/negate for 0xb05 via FADD R249 (comment cites Pokopia
+e88024e6b Djihads80/Eglantine: already in main: Orchid already has it: lower_to_maxwell.h:1525-1550 (HMMA -> TENSOR_MUL_ADD, EDEN_NX2_TENSOR), emit_spirv_tensor.cpp:28-80; the fork's per-title gate ...
+61bfe3dce Djihads80/Eglantine: already in main: Orchid has no LowerExtended switch at all (grep none), so these forms are not gated off by an env default; nothing to port
+e43eaf27b sylvieistaken/selevet-eglantine: not for Orchid: Frame generation/UI default; Orchid has no such feature to enable
+5363a2d0b elkarbeenus/Lichii_improvments_ram: not for Orchid: src/common/game_presets.h only holds MK World preset in Orchid presumably; UI/branding
+4ac930966 AlfaDev23/Lichii: already in main: Orchid kepler_compute.cpp:565-568 and :650 already have UpscaleInsteadOfNativeProgram and native_upscale.h; the fork delta is the OoT-only RGB9E5 ...
+8c2a56630 elkarbeenus/Lichii_improvments_ram: already in main: Orchid lower_to_maxwell.h:1843-1848 already reads absolute/negate for all F2I forms incl. cbuf (comment cites Pokopia
+030c11b27 QuincyForbes/Lichii: not for Orchid: Orchid nx2_gsv.h:2680-2695 SubmitInput never refuses (always push_back), so no packets are lost; vi2 201 and gsv 903 already have real handlers ...
+3876fde5d myshadowww/Lichii: not for Orchid: Orchid has no tools/nx2-precompile and no src/core/file_sys/nx2_shader_extract.cpp; offline precompile tooling, not a runtime fix
+80b016064 myshadowww/Lichii: not for Orchid: Orchid has no vk_starfox_dlss.*, no fire_emblem_upscale.h and no DLSS path under src/video_core (ls finds neither); patched code does not exist
+9568df4e6 myshadowww/Lichii: not for Orchid: feature not in Orchid scope, title is explicit DLSS
+bc61228f7 atmanli/Lichii: not for Orchid: async_draw_policy.h does not exist in Orchid (grep CanDiscardPendingDraw: no hits)
+0b9fdec12 FrsrG/Lichii: already in main: lower_to_maxwell.h:2103-2141 (0xf63 offsets, R247 emit at 2139) and :1286-1296 (SURED dimension 5, 3 coords) already present
+8dd250675 myshadowww/Lichii: not for Orchid: Orchid has no ProcessGameDlss / fire_emblem_upscale.h (grep: none); stand-in feature absent
+2fb5fefdf myshadowww/Lichii: not for Orchid: Orchid has neither fire_emblem_upscale.h nor async_draw_policy.h
+0627dac2b Webmaster-25/Lichii: not for Orchid: core_timing.cpp:169-172 already wakes only on earliest; vk_rasterizer.cpp:1682 FlushCommands returns when draw_counter==0 and has no download-fence ...
+415d3d1c1 FrsrG/Lichii: already in main: commit text says ported from Orchid; Orchid is the source
+36a821683 rpablolimx/Lichii-Arc: not for Orchid: grep EmulatesNative in Orchid src: no hits, function absent
+b65ff9df2 Mvii7/Dozerr: already in main: Orchid dma_pusher.cpp:430-447 wraps the whole IsMemoryDirty block in `!front_native_macro`, so the thunk is already skipped for front native macros
+818d99089 Mvii7/Dozerr: already in main: commit says taken from Orchid 6a1bd310; Orchid sw_blitter/blitter.cpp:296,326 already passes memory_manager.UsesNativeTiling()
+5e1d42fd0 Mvii7/Dozerr: already in main: Orchid has an equivalent: maxwell_3d.cpp:1265 FrontTakesIndirectParameters, :1325 FrontDrawIndirect, :1347 BackDrawIndirect, dma_pusher.cpp:415-436
+42dc6df4f pavelgajdo/Hokkaido: already in main: Orchid nx2_gsv.h:1526,2140 (53 present), geometry_exit.h:174 (0x321 ALD), lower_to_maxwell.h:2139 (R247 offsets)
+2c60503fd pavelgajdo/Hokkaido: not for Orchid: gated on another program id; Orchid nx2_gsv.h:1588 has no per-title frames-ahead table at all (see 6c34811ad4)
+95a028109 Webmaster-25/Lichii: not for Orchid: Android-only settings/host_memory change
+5b6aa6cb1 Webmaster-25/Lichii: not for Orchid: Android-only (host_memory.cpp file backing for LMK on phones; Orchid desktop uses memfd, 32 GB)
+af7e6444a pavelgajdo/Hokkaido: not for Orchid: logging-only diagnostic, no behavior change; wait_trace.cpp absent in Orchid (could help debug an Orbitals splash hang but is not a fix)
+4087bb4c4 pavelgajdo/Hokkaido: not for Orchid: logging only
+b57bfc045 zmckenney/Lichii: not for Orchid: Orchid has no core/file_sys/nx2_shader_extract.cpp (precompile/extract feature absent)
+046db3ed8 arnaudcouturier/Lichii: not for Orchid: vk_pipeline_cache/main_window precompile path; Orchid lacks nx2_recipe.cpp / extract
+72f57b928 arnaudcouturier/Lichii: not for Orchid: Orchid lacks nx2_recipe.cpp and nx2_shader_extract.cpp
+65c9763cc arnaudcouturier/Lichii: not for Orchid: nx2_shader_extract.cpp absent in Orchid
+4fdf804c1 GonzaCass/Lichii: not for Orchid: Intel-driver-specific and depends on EmulatesNativeTensorPrograms / upscale stand-in, neither in Orchid
+35e8fc39f ThatGuyMcd/Lichii-TGM: not for Orchid: precompile extractor not in Orchid
+6ffda5083 QuincyForbes/Lichii: not for Orchid: Orchid has no AnchorClock/PickMovieFrame/nx2_movie* code (grep: none)
+26072fb8c ThatGuyMcd/Lichii-TGM: not for Orchid: Orchid has no DisplayHdrMonitor/QueryDisplayHdr in src/common; Windows-only
+8c771c5f0 phalcoon/Lichii: not for Orchid: Orchid dma_pusher.cpp has no LIVE_READ_CHECK code at all (grep empty); logging-only
+cb14e10a7 kyc/Lichii: not for Orchid: Orchid kepler_compute.cpp:565-568 already falls back to UpscaleInsteadOfNativeProgram on matrix rejection; no tensor_programs setting; matters only ...
+bde2e8664 sof006/Lichii: already in main: src/video_core/nx2.h:53-70 already word-masked
+19c6556ea peigongdsd/Lichii: not for Orchid: Orchid kepler_compute.cpp:568 already has UpscaleInsteadOfNativeProgram; no Intel policy but PC is AMD, host-specific
+4f4a3962c peigongdsd/Lichii: not for Orchid: vk_pipeline_cache.cpp has no such guard; Intel-only and depends on reject_matrix from 19c6556ea8
+88f934ac0 Reiixan/Lichii: not for Orchid: Orchid has no support_cooperative_hmma / EmulatesNativeTensorPrograms (grep empty); host-capability tuning, not a supported-game fix on RX 9070 XT
+8adfa0dbb Reiixan/Lichii: not for Orchid: same as 19c6556ea8; Intel Mesa only
+7094912a9 puppywang/Lichii: not for Orchid: Experiment scaffolding; the ungated Run entry change is 78d1c47587 (judged there); Orchid gpu_split.h:80 MacroWrite has no Run
+eadbbbb15 javocsoft/Lichii: already in main: Orchid platform_service_manager.cpp:191,253 already handles command 2100 as OpenFont exposing built-in fonts through the caller's transfer memory ...
+85ef8c2d4 MaitreyaBobde/Lichii: already in main: Orchid lower_to_maxwell.h:2102-2145 (case 0xf63) already emits the 247 offset register and offsets<<36
+a4f749ddd MaitreyaBobde/Lichii: already in main: Orchid geometry_exit.h:174 already has opcode == 0x321 branch
+4cde64ae0 MaitreyaBobde/Lichii: already in main: Orchid nx2_gsv.h:1526 registers 53 GetRecordedTimestamps, handler at :2140
+89022e41c CyrixJD115/Lichii: not for Orchid: n/a, Orchid keeps EDEN_* switches
+ceb18b299 chrispository/MyLichii: not for Orchid: applies:no, 3377 lines, mixed revert-like sync, not reviewable as one fix
+3409471e4 ryangavin/Lichii: not for Orchid: gated on OoT hashes/program id
+e4409956f aldoeliacim/Lichii: not for Orchid: gated on OoT program id; Orchid default untouched
+80f1e174a Deathnetworks/Lichii: not for Orchid: OoT/Intel-specific stand-in
+c08f58ff5 eborges78/Lichii: not for Orchid: mostly tests/CI; no single verifiable fix, 4% already
+418cb9266 JuegadorX/Lichii_sw2_edition: already in main: Orchid has its own Wonder FPS patch: src/core/file_sys/patch_manager.cpp:483-498 + core/file_sys/wonder_fps_patch.h (commit text says it came from ...
+be207735e JuegadorX/Lichii_sw2_edition: already in main: src/core/hle/service/ns/platform_service_manager.cpp:190-191 registers both, :253 OpenFont, :348 GetBuiltInFontDataSet, IFontService :102
+ba9ba4927 anthonyloukinas/Lichii: not for Orchid: Orchid vk_buffer_cache.cpp has no __builtin_ia32_pause/pause spin at all (grep empty); MSVC/test only
+526b9f240 kmohamed105/Lichii: not for Orchid: Orchid maxwell_3d.cpp:1369 FrontDmaRead has no EDEN_NX2_DMA_SNAPSHOT mode, and no Scheduler::DeferFlush/EDEN_NX2_FENCE_FLUSH_US (grep empty): only ...
+a78257d7e pavelgajdo/Hokkaido: already in main: Orchid already bounds it: buffer_cache.h:862-874 pending_async_download_bytes / WaitAsyncFlushBudget; Pokopia copy-back is nx2.h:33 ...
+78308aaa9 pavelgajdo/Hokkaido: not for Orchid: settings/UI, Android; Orchid nx2_gsv.h:1588 only has EDEN_NX2_FRAMES_AHEAD env
+a2ce678a1 pavelgajdo/Hokkaido: already in main: Orchid GpuSplit::Drain (gpu_split.cpp:207-222) never waits for back_quiet/idle hook (the #639 change doesn't exist), so acquires already behave like ...
+d381a5a72 JayceeB1/Eglantine: not for Orchid: only for GPU Clocks Boost/Overclock + OoT dynamic resolution; Orchid gpu.cpp:195-201 uses monotonic ns report_clock, no divisor; no supported game ...
+5b79cfade pavelgajdo/Hokkaido: already in main: buffer_cache_base.h:715-716 AsyncBufferDownloads -> Tegra::Nx2NeedsBufferDownloads(), nx2.h:33-37 returns true for 0x0400A3A01EE4C000
+dd330ffa9 pavelgajdo/Hokkaido: already in main: lower_to_maxwell.h:1672-1682 already handles any UPn ("through any UPn")
+5b4869f0a pavelgajdo/Hokkaido: not for Orchid: Orchid arm_nce.cpp has no RunStoreToGpuPage (grep empty)
+a3ba8bd03 bunbeans2-arch/Lichii: already in main: Orchid has a different sysmix pump: nx2_audio_device_manager.h:496-520 takes min(filled, owed) frames and never zero-pads a short block (only skips ...
+4012f01b3 KenWuqianghao/Lichii: not for Orchid: Orchid already has KeplerCompute::UpscaleInsteadOfNativeProgram (kepler_compute.cpp:568,650); its lowering takes a cooperative-matrix flag ...
+d0a3fd1b5 iafx/Lichii: not for Orchid: not checked in Orchid; build wiring, file list only
+a71872abc rikomusicx-lgtm/Ocarina2: not for Orchid: file list and diff; Windows build, not Orchid's Linux target
+dbe99493f tlombardo1-sudo/Lichii: not for Orchid: file list; build only
+7eab3c8b0 solluxcaptor429/lichii-ios: not for Orchid: file list; iOS only
+7230ac536 WareSven/Lichii: not for Orchid: diff; build wiring plus input, no game-relevant path
+2eb6269a4 ThatGuyMcd/Lichii-TGM: not for Orchid: diff; FSR3 upscaler is compiled but not dispatched in Orchid (host_shaders/CMakeLists.txt:229-262, no C++ user of prepare_inputs in src/)
+e08fadcbb DahBard/Lichii: not for Orchid: diff; frame generation, not in Orchid
+3e7cb0845 JuliusBairaktaris/Lichii: not for Orchid: diff; upscaler dispatch absent in Orchid (see 2eb6269a4c), OoT-specific
+46cf26e5d MiguelRogelio/Lichii: not for Orchid: externals/FidelityFX-SDK/include/FidelityFX/gpu/fsr1/ffx_fsr1.h:751 unchanged; presentation FSR1 (fork's own note) unaffected; FSR3 RCAS not ...
+b28247fcc cerroverb/Lichii: not for Orchid: externals/FidelityFX-SDK/shaders/fsr3upscaler/ffx_fsr3upscaler_prepare_inputs_pass.glsl exists; no C++ dispatch of that pass in src/ (grep), so the ...
+42d4bab19 xc0f0c0bx/Lichii: not for Orchid: diff; build only
+c817cd803 None: not for Orchid: 
+221720b41 solluxcaptor429/lichii-ios: not for Orchid: diff; iOS only
+3500a2482 mja00/Lichii: not for Orchid: diff; Windows build
+29d084836 chuppatricky/Lichii: not for Orchid: diff; Windows build
+a663d4866 sheepbun/lichii-bunx2: not for Orchid: diff; docs
+be1d92e50 auz466/Lichiistein: not for Orchid: diff; CI, branding and updater
+90292ed2c phalcoon/Lichii: not for Orchid: CMakeModules/NxFormat.cmake absent in Orchid (checked), so the pin does not apply
+657ae0cc2 Suxto/Lichii: not for Orchid: externals/renhdrum absent in Orchid (checked); haptics, not a game fix
+2a79e717f tlombardo1-sudo/Lichii: not for Orchid: diff; Windows only
+020203e7c mariohbd/Lichii: not for Orchid: diff; Windows only
+1c0fe7742 sexyboomer888-gif/Lichii: not for Orchid: diff; logging-only
+02c3e269d sexyboomer888-gif/Lichii: not for Orchid: diff; logging-only
+09e01a074 Nolar-Hack/Lichii: not for Orchid: diff; diagnostic logging
+44a8ab74b QuincyForbes/Lichii: not for Orchid: src/audio_core/sink/sdl3_sink.cpp; trace-only
+416ca548f Webmaster-25/Lichii: not for Orchid: diff; Android only
+f22ba99e5 atmanli/Lichii: not for Orchid: diff; logging-only, the meter already exists in Orchid
+d5e92ca39 sexyboomer888-gif/Lichii: not for Orchid: diff; logging-only
+e7119f7d2 multicody10/Lichii: not for Orchid: diff; dead fields
+6f6c581b3 javocsoft/Lichii: not for Orchid: diff; affects NVIDIA drivers only, Orchid's test machine is AMD RX 9070 XT
+95ec01a5c AlfaDev23/Lichii: not for Orchid: diff; online services, not offline gameplay
+08b95c876 vl3214/lichii-test: not for Orchid: Orchid has only the Eden/yuzu legacy path table in src/common/fs/path_util.cpp; the diff is folder import and UI, nothing a game symptom needs
+7967978d0 AmateurWizrd/lichii-graft: not for Orchid: Windows MSVC build flags only (src/core/CMakeLists.txt); nothing for Orchid's Linux build
+86783962c solluxcaptor429/lichii-ios: not for Orchid: iOS only
+1bd8f46fc mine66781-cpu/Lichii: not for Orchid: Windows build flags
+ce38e2286 JulesB40/Lichii-testing: not for Orchid: Android only
+4683c5a6c chuppatricky/Lichii: not for Orchid: updater/branding UI
+d28d6e546 xc0f0c0bx/Lichii: not for Orchid: compiler-flag plumbing, no runtime effect on games
+70968d5d5 seanhoff561/Lichii: not for Orchid: Windows MSVC build flags only
+e49779f3c QuincyForbes/Lichii: not for Orchid: arm64 host timer code; Orchid PC is x86-64
+dde925e77 solluxcaptor429/lichii-ios: not for Orchid: iOS/macOS only
+2e2aed8f1 gabriel-accetta/Lichii: not for Orchid: path/branding change
+dcb78bf1d GonzaCass/Lichii: not for Orchid: path helper for portable mode only
+2fe7ec0ba sof006/Lichii: not for Orchid: portable layout, not a game fix
+5d750e467 Nolar-Hack/Lichii: not for Orchid: portable layout
+dfe032528 c4k3ss/Lichii: not for Orchid: gated on another game
+cbe51e88a DahBard/Lichii: not for Orchid: Orchid src/video_core/memory_manager.cpp:944-947 GetSpan returns nullptr when !IsContinuousRange (HAVE for the fix); diff itself is logging and test
+87052a42f solluxcaptor429/lichii-ios: not for Orchid: iOS only
+f22bbd0d0 Ghostwolf13/Lichii: not for Orchid: Windows-only memory trimming, gated by an env switch
+b5ba2b6a8 street09fight/Lichii: not for Orchid: iOS only
+569238b51 trianglebraindev/Lichii: not for Orchid: logging only
+50f1ce5fa ne1i/Lichii: not for Orchid: unbuilt WIP
+07e6da2f6 sexyboomer888-gif/Lichii: not for Orchid: logging-only counters
+2eb8944ca QuincyForbes/Lichii: not for Orchid: only input and config strings, no game symptom
+740650380 elkarbeenus/Lichii_improvments_ram: not for Orchid: branding
+afef25e8c danieljesus/Lichii: not for Orchid: defaults for another platform/game
+2d5771913 sheepbun/lichii-bunx2: not for Orchid: frame generation, not in Orchid
+c001510bf cerroverb/Lichii: not for Orchid: online redirect, not a game fix
+b17b57747 conongnang/Lichii: not for Orchid: FSR defaults, not in Orchid
+324809c02 chuppatricky/Lichii: not for Orchid: UI feature gated on another game
+8998e9e6c kmohamed105/Lichii: not for Orchid: Orchid src/common/settings.h:206-208 (memory_layout_mode 4Gb), :554 (nvdec Cpu), :784 (use_docked_mode Handheld): defaults would change every game, ...
+8782182f8 Feralnet/Lichii: not for Orchid: Orchid src/common/settings.h:912-913 still has save=false; logging-only diagnostic, no effect on emulation.
+3f104de53 JuliusBairaktaris/Lichii: not for Orchid: Orchid src/common/spin_recursive_mutex.h:59,89 uses state.notify_one/state.wait (futex on Linux, so the Windows condvar path does not apply); ...
+a82122933 Kerberone/Lichii: not for Orchid: Orchid src/common/thread.cpp has no PinCurrentThread; whole change is #ifdef _WIN32, Leon runs Linux.
+8644c947e relive202/Lichii: not for Orchid: Orchid src/common/thread.cpp has no ApplyProcessPrioritySwitch; Windows-only code.
+75a409810 Deathnetworks/Lichii: not for Orchid: Orchid src/video_core/vulkan_common/vulkan_device.h has no CanReadPipelineCacheDuringBuilds; the crash is Intel Windows only.
+bc6c43b82 GoatTech-42/Lichii: not for Orchid: Its only caller is the Intel-Windows change 75a40981 (NA); nothing in Orchid needs it.
+f496bc45b QuincyForbes/Lichii: not for Orchid: Only Windows code (src/common/windows/timer_resolution.cpp); Orchid has no ReleaseTimerResolution. Leon's machine is Linux.
+148e89ddf ThatGuyMcd/Lichii-TGM: not for Orchid: New helpers with no caller in supported games; the fork says it exists for Ocarina of Time.
+a1bed09bf ghzeni/Lichii-anime-coop: not for Orchid: macOS-only branch; Orchid src/core/internal_network/network_interface.cpp has no __APPLE__ path.
+0bbff516f krim404/Lichii: not for Orchid: macOS-only code; Orchid src/core/CMakeLists.txt has no APPLE framework link.
+85746866f gabaoun/Lichii: not for Orchid: Build/CI change for Windows; Orchid src/core/CMakeLists.txt LTO block unchanged.
+e7f534c99 tlombardo1-sudo/Lichii: not for Orchid: Orchid src/core/arm/dynarmic/arm_dynarmic.h has none of these; nothing in supported-game code calls them.
+2fca3f782 rikomusicx-lgtm/Ocarina2: not for Orchid: Orchid src/core/arm/dynarmic/arm_dynarmic_64.cpp:297 and arm_dynarmic_32.cpp:196 use 512_MiB; applying it would add cache evictions and recompile ...
+c8515307d jpkto/Lichii: not for Orchid: Logging-only diagnostic; Orchid arm_dynarmic_64.cpp:42-48 logs pc/lr/sp only.
+0c56809ef Webmaster-25/Lichii: not for Orchid: NCE is built only for HAS_NCE hosts (src/core/CMakeLists.txt:1252); Leon's PC is x86_64 and uses dynarmic, so the path does not run there.
+7adcf1557 pavelgajdo/Hokkaido: not for Orchid: NCE fault path exists only on ARM hosts (src/core/arm/nce/arm_nce.cpp:150,168, HAS_NCE gate); not used on Leon's x86 PC.
+7303d644d javocsoft/Lichii: not for Orchid: Only in src/core/arm/nce/interpreter_visitor.cpp, an ARM-host path (HAS_NCE); Leon's x86 PC does not use it.
+00c0a8d83 Nolar-Hack/Lichii: not for Orchid: Orchid src/core/core.cpp ShutdownMainProcess has no guest_memory_readers; the reader is not a supported game.
+e87fa90b8 JulesB40/Lichii-testing: not for Orchid: Orchid has no env.txt loader (src/core/core.cpp); a convenience for setting EDEN_NX2_* switches, not a fix for supported games.
+8466f39b0 monsterlag/Lichii: not for Orchid: Test-only hooks under LICHII_ISSUE222_WORKER_REPRO; nothing in Orchid's build defines it.
+04e3c86a8 auz466/Lichiistein: not for Orchid: Superseded by 8d2746e8f1 (same logic, Orchid's current code is the same at core_timing.cpp:244-249); port that one instead.
+c2398ad42 celmax85/Lichii: already in main: Orchid src/core/core_timing.cpp:79-84 already does SetCurrentThreadName, priority and prctl(PR_SET_TIMERSLACK, 1UL, ...).
+41e3e84bb JulesB40/Lichii-testing: not for Orchid: Android arm64 NCE only (#if __ANDROID__ block); Orchid cpu_manager.cpp has no such code and Leon runs Linux x86.
+3bcbcee45 PantACRO4life/Lichii: not for Orchid: Diagnostic code; its refresh path is only for investigation, not a fix that is shown to work.
+32957981f jvhuaxia/lichii: not for Orchid: Build fix for the Windows PGO runner; Orchid fssystem_bucket_tree.h:345 still passes the size. Leon's Linux build does not need it.
+68aa91eb7 marcochiusso-lgtm/Lichii: not for Orchid: Orchid src/core/file_sys/ips_layer.cpp:131 uses '\e'; GCC and Clang on Linux accept it, so no Leon-relevant change.
+0ba49560c chuppatricky/Lichii: not for Orchid: Frame generation is not in Orchid's supported scope (brief); UI only.
+7ade2db46 vl3214/lichii-test: not for Orchid: Gated on Ocarina's mod; no effect on supported games.
+338b55400 mariohbd/Lichii: not for Orchid: Ocarina-only HUD layout, UI.
+0e43dc96a mariohbd/Lichii: not for Orchid: Ocarina-only HUD layout, UI.
+1c543e420 zonnic0/Lichii: not for Orchid: Diagnostic logging across fs/VFS/fs_i_storage; no fix for supported games.
+3e28e8d1e DouglasTR/Lichii: not for Orchid: A workaround that swaps textures for a damaged file of one game, not a fix for supported games; Orchid src/core/file_sys/nup_container.cpp not ...
+1a099c488 clongo/Fujii: not for Orchid: src/core/file_sys/nup_container.cpp:710-725 OpenFile, no damaged-member check or stand-in in Orchid; another game's dump, not a supported game.
+5ca177f78 Felixto22/Lichii: not for Orchid: src/core/file_sys/nup_container.cpp:710-725 (no repair layer in Orchid); gated on EDEN_NX2_REPAIR_ZS and Ocarina dumps.
+36bce8efc anthonyloukinas/Lichii: not for Orchid: UI and BUILTIN_PATCHES for Ocarina only; Orchid has no such patch table in patch_manager.cpp (not checked in full).
+71eae49b2 QuincyForbes/Lichii: not for Orchid: src/core/file_sys/vfs/vfs_concat.cpp:25,49,80-85: Orchid still allocates StaticVfsFile per gap; only an allocation saving, no symptom seen in the ...
+170503e08 ThatGuyMcd/Lichii-TGM: not for Orchid: src/core/frontend/framebuffer_layout.cpp:57-58: Orchid still maps R21_9 to 9/21 exactly; window layout only, not emulation.
+06b8e9689 c4k3ss/Lichii: not for Orchid: src/core/hle/kernel/board/nintendo/nx/k_memory_layout.cpp:129ff: the probe is an env switch for another game's network test.
+dc524cf10 cerroverb/Lichii: not for Orchid: src/core/hle/kernel/board/nintendo/nx/k_system_control.cpp:138ff and svc_info.cpp:90: gated on a Duskbloods probe switch.
+b4198c084 cerroverb/Lichii: not for Orchid: src/core/hle/service/acc/acc.cpp token code: online stand-in, env-gated; not a local-play fix for supported games.
+70ad6fd12 rikomusicx-lgtm/Ocarina2: not for Orchid: src/core/hle/service/am/service/graphics_scale_controller.h: test knob that lowers render scale, against the Orchid rule of 1x scaling for all tests.
+2cb8ea919 hedigrrr1/Hedfix: not for Orchid: src/core/hle/service/filesystem/fsp/fs_i_storage.cpp (pacing present in Orchid); the change is gated on Ocarina, so no supported game gains from it.
+288ac858d Aakashjammula/Lichii: not for Orchid: fs_i_storage.cpp Ocarina diagnostic knob, default same; no supported game symptom.
+6452a241f zonnic0/Lichii: not for Orchid: fs_i_storage.cpp: diagnostic only, logs the setting, no default change.
+58369b975 reinderhe/Lichii_HeadsMissing: not for Orchid: src/core/hle/service/filesystem/fsp/fsp_srv.cpp OpenDataStorageByDataId: another game's data, experimental.
+4aca5284d samaBR85/Lichii: not for Orchid: src/core/hle/service/hid/hid_server.cpp: logging-only diagnostics for studying rumble.
+803029ce0 reinderhe/Lichii_HeadsMissing: not for Orchid: src/core/hle/service/mii/mii.cpp: diagnostic and experiment for one non-supported game.
+db948b16b ne1i/Lichii: not for Orchid: grep finds no g_nx2_guest_frame_interval_ns in Orchid src: the global it clears does not exist here, so the bug is not reachable in this form.
+a39e4f639 pavelgajdo/Hokkaido: not for Orchid: src/core/hle/service/nx2_gsv.h: the change is under #ifdef __ANDROID__, Windows/macOS/Linux see no change.
+13f402a03 AmateurWizrd/lichii-graft: not for Orchid: src/core/hle/service/nx2_gsv.h:3074 Orchid already defines 903 as VideoFinalize, a different meaning; the change is logging for one game.
+5f29fbe1e nicolasfalesy/Lichii: not for Orchid: src/core/hle/service/nx2_gsv.h capture layout: diagnostic screenshot size only, no effect on emulation.
+4cfb744eb vouion/Lichii: not for Orchid: src/core/hle/service/nx2_gsv.h:1756 and maxwell_3d.cpp: logging only.
+88cb7871e multicody10/Lichii: not for Orchid: new src/core/hle/service/nx2_oot_time.h only, keyed on ProgramId 0x0400486024DEC000, not used by any supported game.
+3b14ef1ac AmateurWizrd/lichii-graft: not for Orchid: src/core/hle/service/prepo/prepo.cpp: only the Critical log line changes, the reply is the same as the auto stub's.
+f4cc64d13 CtrlP1/Lichii: not for Orchid: src/core/hle/service/service.cpp: logging only, same zeroed reply.
+078cfd8f3 peop8d/LichiibeebsNX2: not for Orchid: src/core/hle/service/service.cpp HandleSyncRequest: Android and EDEN_NX2_SLOW_IPC logging only.
+c87acfc66 atmanli/Lichii: not for Orchid: src/core/hle/service/sockets/bsd.cpp:1368: logging only, the refusal itself is unchanged.
+2e15db39b cerroverb/Lichii: not for Orchid: sockets/ssl online stand-in via EDEN_NX2_ONLINE_* switches; another game, not a local-play fix.
+7b48cb8e4 krim404/Lichii: not for Orchid: src/core/internal_network/network_interface.cpp: macOS only.
+e91c94bae JulesB40/Lichii-testing: not for Orchid: src/core/loader/deconstructed_rom_directory.cpp: HAS_NCE is defined only for arm64 Android/Linux (CMakeLists.txt:318), Orchid's PC build is x86-64, ...
+0279cc4a6 pavelgajdo/Hokkaido: not for Orchid: src/core/loader/deconstructed_rom_directory.cpp:458: NCE is arm64-only (CMakeLists.txt:318), not in Orchid's PC build.
+2a499b534 Felixto22/Lichii: not for Orchid: src/core/nx2_block_counts.h (new) and dynarmic a64_emit_x64.cpp: diagnostic instrumentation, emits counts only when enabled.
+558a8a76b multicody10/Lichii: not for Orchid: src/core/loader/nso.cpp:331: process-id gated on Ocarina's ProgramId, another game.
+557e50730 javocsoft/Lichii: not for Orchid: src/core/loader/nup.cpp:70-80 BuildNacp: affects the game title metadata only, shown in the game list.
+1cf328a94 vouion/Lichii: not for Orchid: src/core/memory.cpp:922 HandleRasterizerWrite: diagnostic counter only.
+fe4344db8 relive202/Lichii: not for Orchid: src/core/perf_stats.cpp: logging and diagnostics only; EDEN_NX2_FPS_LOG=0 turns it off.
+c234ec16e dylandeheer/Stitch: not for Orchid: src/CMakeLists.txt, src/dynarmic/CMakeLists.txt: Apple build and test only.
+9cbef87bc sorokya/Lichii: not for Orchid: src/dynarmic/CMakeLists.txt: Apple build only.
+9c54010c3 mysterypaintwo/Lichii: not for Orchid: src/dynarmic/src/dynarmic/backend/arm64/*: Orchid's PC build is x86-64 (no arm64 backend on this host).
+7e948d2eb ksdbh/Lichii: not for Orchid: src/dynarmic/src/dynarmic/backend/arm64/*: arm64 only, not built for the PC.
+28430be63 VibeCodyH/Lichii: not for Orchid: src/dynarmic/src/dynarmic/backend/arm64/address_space.cpp: arm64 only, not built for the PC.
+9ed5f614a CtrlP1/Lichii: not for Orchid: src/dynarmic/src/dynarmic/backend/arm64/emit_arm64_a64.cpp: arm64 only, not built for the PC.
+1f29d7b65 MiguelCaroJimenez/Lichii: not for Orchid: Orchid src/dynarmic/src/dynarmic/common/ has no atomic_ref.h; the header is only needed where libc++ lacks atomic_ref (Android), Leon's build is Linux
+7f9ca425b rikomusicx-lgtm/Ocarina2: not for Orchid: Orchid has no Switch 2 Pro HD rumble path (grep of sdl_driver.cpp HasHDRumble) and this is a controller feature, not one of the open game problems; ...
+1305b6691 RoksTK/Lichii: not for Orchid: Feature for controller mapping (UI plus EmulatedController ReloadInput rewrite), not a game fix; Orchid's emulated_controller.cpp:200-360 has no alt ...
+6f33335c7 Webmaster-25/Lichii: not for Orchid: Orchid src/hid_core/hid_core.cpp SetSupportedStyleTag has no __ANDROID__ block; the change is #ifdef __ANDROID__ only, Leon's build is Linux
+94be3c6c4 liubowwen/Lichii: not for Orchid: Fix for one non-supported game's style narrowing; Orchid npad.cpp has no is_sideways_left (the diff's context is missing from Orchid) and the change ...
+277aed048 liubowwen/Lichii: not for Orchid: Logging-only diagnostics, marked TEMPORARY; Orchid six_axis.cpp:89-92 is unchanged
+3428cbaef atmanli/Lichii: not for Orchid: Peripheral (GC adapter) rumble feel only; not one of the supported-game problems; Orchid gc_adapter.cpp:329-340 still has the duty mapping, leaving ...
+ffab75579 reinderhe/Lichii_HeadsMissing: not for Orchid: Peripheral housekeeping on shutdown, not a game fix
+7214bdd83 blackxzin/Lichii: not for Orchid: Input-mapping feature for mouse wheel users, no supported-game symptom
+742a2c04a gamehhh7/Lichii: not for Orchid: Peripheral (Steam Controller) motion recovery; not a supported-game problem
+b1bf4bf64 vicrodh/Lichii: not for Orchid: Build, CI and packaging only; its one SDL hunk only changes the Xbox hint on Linux
+ca085c52e vicrodh/Lichii: not for Orchid: Peripheral discovery for one Xbox controller family, no supported-game symptom; Orchid sdl_driver.cpp still forces it off on all platforms
+4b1836609 SpectateHaZe/Lichii: not for Orchid: Test-harness convenience for unattended TAS runs, not a game fix; Orchid's tas_input.cpp is not affected
+24a0fa2d0 gamehhh7/Lichii: not for Orchid: Input-configuration UI behaviour (the "Shake!" mapping dialog), not a game fix
+eb594e9ab vouion/Lichii: not for Orchid: Tuning and A/B switch for one other game's atlas; the default is unchanged, so it changes nothing for Orchid's games
+3fb0da708 rikomusicx-lgtm/Ocarina2: not for Orchid: Tuning knob for one game's geometry load, default unchanged; the fork says it is aimed at a game it names only as heavy on the 3050
+05842edc6 reinderhe/Lichii_HeadsMissing: not for Orchid: Experiment knobs for one non-supported game's pointer drift; default behaviour unchanged
+5a53a2dde krim404/Lichii: not for Orchid: Orchid src/shader_recompiler/environment.h:72-74 and src/video_core/shader_environment.h has no copy/move declarations; no shader job queue exists in ...
+fbb8d7072 sexyboomer888-gif/Lichii: not for Orchid: Diagnostic switch for another game's bug; Orchid does not need a skip toggle. Not ported.
+8b714141e DrSergioRFilho/Lichii: not for Orchid: Windows compiler workaround; Orchid's Linux build does not use that path and it is not a runtime fix.
+3cb7f6a03 rikomusicx-lgtm/Ocarina2: not for Orchid: Compiler workaround and documentation of another fork's session; nothing for Orchid's games.
+17be11ace SimonSant/Lichii: not for Orchid: Local debug switch; it changes no default behaviour and Orchid has no need for it.
+c99790b87 vl3214/lichii-test: not for Orchid: Off unless set, so no default effect; it is an experiment switch, not a fix. Revisit only if host RAM from IR pools shows up in a measurement ...
+9da741d0f trianglebraindev/Lichii: not for Orchid: Diagnostics and an experiment for another game's shadow handles; the fix it tests is in c461144f50 and 10f7a4c14f. Not ported.
+293a683f9 GonzaCass/Lichii: not for Orchid: Device-specific (Deck governor, SteamOS helper); Orchid's test PC is an RX 9070 XT on CachyOS and the change touches system power state. Not for ...
+abc7e0128 JuliusBairaktaris/Lichii: not for Orchid: Verification and logging only; changes no output. Orchid does not need it.
+22d1114d2 haidanQAQ/Lichii: not for Orchid: Nothing runs it, so it fixes nothing yet; a later wiring commit would be the one to judge. Revisit when the fork wires it in.
+86a66cd5b AkiiTW/Lichii: not for Orchid: Build and CI configuration of another fork; Orchid's release/PGO flags are not changed by this.
+ff9ec044c SirenBrink/Lichii-DLSS-G: not for Orchid: Build and packaging of another fork; nothing in the runtime. Not ported.
+160ee6e2c PantACRO4life/Lichii: not for Orchid: Its own comment says diagnostics only: nothing is created or synchronized, so no runtime effect in Orchid.
+570b1f37d sexyboomer888-gif/Lichii: not for Orchid: Unused header; the wiring that would use it (the trap in the core) is not in this commit. Revisit with its wiring commit.
+007ce9ca3 kmohamed105/Lichii: not for Orchid: Diagnostic switch only; Orchid dma_pusher.cpp still has the static init (grep g_record_parsed_entries). Logging-only.
+4c531398f peigongdsd/Lichii: not for Orchid: Feature of another game's stand-in (Orchid has no such copy operation), not in supported games.
+246bb9419 c4k3ss/Lichii: not for Orchid: Logging-only diagnostic in the DLSS path (kepler_compute.cpp); Orchid has no DLSS.
+d289f0561 joaogmesquita/Lichii: not for Orchid: Logging path in the upscale stand-in (kepler_compute.cpp:834-865 region); not a game-facing fix.
+f75c6eac0 Quixomatic/Lichii: not for Orchid: Orchid maxwell_3d.cpp:912-913 has the static, but it is only called after a method == shadow_ram_control compare (lines 1001, 1132), so it is rare; ...
+19c1cdc1d tlombardo1-sudo/Lichii: not for Orchid: Orchid maxwell_3d.h:3233 has 2 tables, but nothing in src/video_core writes tables[2]; the D3D12 backend is not in Orchid.
+847b42103 auz466/Lichiistein: not for Orchid: Gated on OcarinaProgramId 0x0400486024DEC000 (fork puller.cpp, RescueOcarinaFlipCounter); Orchid has no such code and it only runs for another game.
+6df51e10b JuliusBairaktaris/Lichii: not for Orchid: Profiler labelling only (puller.cpp OnBack, line 51); no effect on game behaviour.
+b701ffddd tlombardo1-sudo/Lichii: not for Orchid: Diagnostic switches, off by default; Orchid macro.cpp:73 indirect draw path unchanged.
+160d53b26 marcochiusso-lgtm/Lichii: not for Orchid: Diagnostic dump only (src/video_core/gpu_logging/gpu_logging.cpp, DumpSpirvShader).
+079b4e037 Jermzxxx/switch2deez: not for Orchid: Windows build and a log line; no game effect.
+0767ca95e icarocarvg/Lichii: not for Orchid: Opt-in experiment off by default, gated on a version-93 test, plus CI; ac02f8404f has the ungated part.
+8329d0197 SneakyBlueberry/Lichii: not for Orchid: Windows release packaging and CI (ffmpeg.cpp part is a name lookup); Linux builds use the system FFmpeg.
+4a6fad44f SirenBrink/Lichii-DLSS-G: not for Orchid: Unit-test scaffolding; no game effect.
+bf21a9337 Feralnet/Lichii: not for Orchid: Frame generation is in the NA list (Orchid has no FSR3 frame gen in use; default off in the fork too).
+cabee4680 mja00/Lichii: not for Orchid: Frame generation feature (NA list); same area as bf21a9337b.
+c9d06c226 ThatGuyMcd/Lichii-TGM: not for Orchid: Another game's stand-in and DLSS; not in Orchid's supported games.
+8e0396075 remora24/Lichii: not for Orchid: FSR feature for Ocarina's stand-in; NA.
+222189504 Quixomatic/Lichii: not for Orchid: MemoryManager::FlushCaching (memory_manager.cpp:934-936) already returns at once on an empty accumulator (InvalidateAll checks start_address), so the ...
+1956b5756 Drizz1le/Lichii: not for Orchid: Orchid has SetNativeSyncpointShim (memory_manager.cpp:99) but no EDEN_NX2_HANDLE_PTR_CACHE (grep: no match), so the helper has no caller here.
+4df2cd1ce thanosipsis/Lichii-linux-dlss: not for Orchid: Another game's DLSS helper, not in the supported games; the commit itself says it does not enable DLSS.
+8fecd4ffb mariohbd/Lichii: not for Orchid: Refactor for the fork's experiment; Orchid native_qmd.h:63-70 has no such predictor copy.
+b566dcf86 ThatGuyMcd/Lichii-TGM: not for Orchid: Ocarina-only UI layout add-on; the commit says the draw hook still needs a capture. Not a supported game.
+88541fede bunbeans2-arch/Lichii: not for Orchid: Another game's workaround, off by default and gated by an env var; Orchid query_cache has no such hook and it would hide real occlusion results.
+8cd0f72a7 Feralnet/Lichii: not for Orchid: Diagnostic override, off unless set; the commit says it did not fix the Ocarina vegetation.
+1973c1df5 Joey-Magnus/Lichii: not for Orchid: Qt compatibility-report UI and renderer device info; no game effect.
+1574f39a3 blazn56ace/Lichii: not for Orchid: Logging-only diagnostic (gl_rasterizer.cpp QueryFallback).
+33f949b98 rikomusicx-lgtm/Ocarina2: not for Orchid: Orchid gl_shader_cache.cpp:333 and 354 are consistent with each other (two-argument lambda); no such parameter exists in Orchid, so there is nothing ...
+2086cf4c5 gamehhh7/Lichii: not for Orchid: Orchid has no mesh fallback (no renderer_vulkan file matching mesh, no MeshFallback symbol in src/video_core); the helper has no caller.
+c0b984f32 hojoworks/Lichii: not for Orchid: The experiment flag does not exist in Orchid (grep GPU_DRAWS in src/video_core: no match); feature absent.
+e2cf06e16 Kerberone/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/pipeline_helper.h has no BuildsUnoptimized; grep finds no VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT in ...
+d17dfef88 leadaenima/Lichii: not for Orchid: Orchid src/video_core has no DISABLE_OPTIMIZATION_BIT or BuildsUnoptimized (grep). Gated on OoT hash 3c2193d0166610b3.
+c29cc949a sthompson-dev/Lichii: not for Orchid: Orchid src/video_core has no DISABLE_OPTIMIZATION_BIT (grep). Gated on OoT shader hashes.
+7cec932ec K-code-AI/Greenhat-Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/pipeline_statistics.cpp:36 has Collect only; no EDEN_NX2_PIPELINE_STATS. Logging-only diagnostics and ...
+cb155dc32 cirnoice9/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/present/frame_gen.cpp:235 still rebuilds on any flow-scale change. Frame generation is not a supported-game ...
+886ed8fff cirnoice9/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/vk_present_manager.cpp has no such pacing; frame generation is not a supported-game problem.
+e15d01903 rikomusicx-lgtm/Ocarina2: not for Orchid: Orchid src/video_core/renderer_vulkan/present/frame_gen_pacer.cpp:72 still uses the configured target rate only. Frame-gen tuning, not a game fix.
+d39dbd88b AndreaMelk92/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/present/frame_gen_pacer.cpp has the stock constants (MINIMUM_BASE_RATE, BURST_CADENCE_RATIO at lines 18-19); ...
+73952edc3 JuliusBairaktaris/Lichii: not for Orchid: Orchid layer.cpp:11-12 has the same undefs by hand; vulkan.h does not. Build-only fix.
+739a6ed95 adamuremek/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/present/lsfg_mipmaps.cpp: same narrowing; LSFG frame-gen and MSVC-only build issue.
+3751afb09 cerroverb/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/present/lsfg_shaders.cpp uses IsFloat16Supported as the gate; frame generation on NVIDIA only, not a ...
+528413646 krim404/Lichii: not for Orchid: Orchid post_process.cpp:455 and vk_texture_cache.cpp still pass lod_bias unguarded; but the portability subset is MoltenVK-only, not Linux.
+53e7d844d nerdjb/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/present/util.cpp:28 has no extra_usage; fork glue for large-motion frame generation.
+631976f25 ThatGuyMcd/Lichii-TGM: not for Orchid: Orchid src/video_core/renderer_vulkan/renderer_vulkan.cpp:303 still creates the wrapped image per capture; screenshot path only, no gameplay effect.
+363e94167 nicolasfalesy/Lichii: not for Orchid: Orchid vk_buffer_cache.cpp:520 uses RequestOutsideRenderPassOperationContext() with no location; profiling only.
+e6d862ca5 JuliusBairaktaris/Lichii: not for Orchid: Orchid src/video_core/renderer_vulkan/vk_descriptor_buffer.cpp:19 has no env switch; an experiment toggle, not a fix.
+674f37de3 dylandeheer/Stitch: not for Orchid: Orchid vk_fsr3_upscaler.cpp: FSR3 upscaler, an upscaling feature outside the scope of the supported-game issues.
+87948a2a1 remora24/Lichii: not for Orchid: Orchid has no vk_fsr4_linux.cpp; external assets, another game's stand-in, upscaler.
+3dcff331b 2600box/Lichii: not for Orchid: Orchid vk_graphics_pipeline.cpp has no ConfigureDelta and no graphics-pipeline library path (grep); the feature is not in Orchid.
+afbfc1db5 AmateurWizrd/lichii-graft: not for Orchid: Orchid vk_graphics_pipeline.cpp MakePipeline (near :1690) has no DISABLE_OPTIMIZATION flag; experiment for OoT only.
+3fcc92b4c rikomusicx-lgtm/Ocarina2: not for Orchid: Orchid vk_pipeline_cache.cpp:1223 has only the const overload and its call sites at :841 and :1167 compile as is; fork-only merge glue.
+40b676499 remora24/Lichii: not for Orchid: Orchid vk_pipeline_cache.cpp:2599 catch block; warning-only build fix.
+7d66bfff5 peigongdsd/Lichii: not for Orchid: Orchid vk_pipeline_cache.cpp:1465 QueueVulkanPipelineCacheFlush; Windows Intel-only.
+99cbb1ffd peigongdsd/Lichii: not for Orchid: Orchid vk_pipeline_cache.cpp:1133,1155 keys are local-only; no donor-capture or shared-cache loading in Orchid. Fork-only shared cache feature.
+959187f9f cerroverb/Lichii: not for Orchid: Orchid vk_pipeline_cache.cpp:590-593 and vulkan_device.cpp:603; NVIDIA-only experimental switches, not on this AMD PC.
+65267ef5a pbihan/Lichii: not for Orchid: Orchid vk_pipeline_cache.cpp:458-466 DriverCachesPipelines returns true for AMD proprietary with no switch; the problem is AMD Windows ...
+391c396c8 Kabosune/Lichii: not for Orchid: Orchid has no warm-up threads (grep warm_cancel / graphics_warm_threads in src/video_core returns nothing); the patched code is not in Orchid.
+5eb69bd6a joaogmesquita/Lichii: not for Orchid: Orchid vk_pipeline_cache.cpp:1159-1160 only checks MoltenVK; CI/build flags and an iGPU policy, not on Leon's discrete GPU.
+55dcce421 mariohbd/Lichii: not for Orchid: Orchid vk_rasterizer.cpp:1392-1395 Clear has no timing; logging-only diagnostics.
+edebfdcdd vouion/Lichii: not for Orchid: Orchid vk_rasterizer.cpp:1175-1178 has the deferred clear always on; A/B switch only, no fix.
+3789ed88d cerroverb/Lichii: not for Orchid: Orchid vk_rasterizer.cpp Clear (around :1282) has no such path; test switch only.
+9cda61584 pavelgajdo/Hokkaido: not for Orchid: Orchid vk_rasterizer.cpp:449-455 PrepareDraw has no such skip; gated on another game's title id.
+56270ff12 GonzaCass/Lichii: not for Orchid: Orchid vk_rasterizer.cpp AccelerateSurfaceCopy (~:2071) has no stand-in switches; OoT stand-in experiment only.
+e2d99b3f4 ThatGuyMcd/Lichii-TGM: not for Orchid: Orchid vk_rasterizer.h has no bound_channel_id (grep); this commit alone changes nothing, its users come with 21cd585450.
+e71c0fdde blackxzin/Lichii: not for Orchid: Orchid vk_scheduler.cpp:1056-1062 keeps the barrier; experiment only.
+71641b73d arnaudcouturier/Lichii: not for Orchid: Orchid vk_scheduler.h:295 has alignas(std::max_align_t) on data; the misalignment only happens on MSVC/clang-cl (max_align_t 8), so a Windows-only ...
+23ae31316 krim404/Lichii: not for Orchid: Orchid has no DetachedEnvironmentMiss (grep src); the shader-reuse detached environment is not in Orchid.
+21cd58545 ThatGuyMcd/Lichii-TGM: not for Orchid: Orchid vk_state_tracker.h has no ClearChannel; this commit adds an uncalled method, its callers come with the #754 channel work, which Orchid lacks ...
+29a7da03c marcochiusso-lgtm/Lichii: not for Orchid: Orchid vk_texture_cache.cpp:558-575 has no compression control; the path only targets pre-GFX10 RADV, and this PC's RX 9070 XT (GFX12) is not ...
+1edbb2062 cfranyota/Lichii: not for Orchid: Orchid vk_texture_cache.cpp has no decoder-build fallback; MoltenVK/Metal-only failure.
+2b1eae93d ksdbh/Lichii: not for Orchid: Orchid vk_texture_cache.cpp ImageView null-texture setup (~:4338) is native-null only; MoltenVK-specific validation fix.
+6c0fb678a marcelog97/Lichii: not for Orchid: Orchid vk_present_manager.cpp:133 reads only Settings::values.async_presentation; diagnostic switch, no fix.
+762287561 tlombardo1-sudo/Lichii: not for Orchid: Orchid has no such code; the fork's own image_info.h and texture_cache.cpp comments say the values are stored only, so there is no behaviour to port.
+dfd632443 tlombardo1-sudo/Lichii: not for Orchid: Orchid's Vulkan runtime (src/video_core/renderer_vulkan/vk_texture_cache.cpp) defines none of these hooks, so the `requires` branches stay off; the ...
+137f5fb72 reinderhe/Lichii_HeadsMissing: not for Orchid: Logging-only diagnostic for a game not in the supported list; Orchid's texture_cache.h InsertImage has no such code (no change needed).
+525045377 CtrlP1/Lichii: not for Orchid: Orchid src/video_core/texture_cache/texture_cache.h has no such override line; the default behaviour is unchanged, so nothing to port for supported ...
+47f7d3f94 KenWuqianghao/Lichii: not for Orchid: Orchid's native upscale stand-in (src/video_core/engines/native_upscale.h, kepler_compute.cpp) has no E5B9G9R9 blit read, and g_blit_source_format ...
+61bff3f54 celmax85/Lichii: not for Orchid: Logging-only diagnostic (texture_cache.h:2759-2790 has no such trace); nothing to port for supported games.
+4d2ede60a Quixomatic/Lichii: not for Orchid: Orchid has no src/video_core/v2 directory; the commit changes no behaviour and is part of a pipeline rewrite Orchid does not have.
+6084d9c7f auz466/Lichiistein: not for Orchid: FSR 4 is not in Orchid (no fsr4 file or symbol under src).
+07ad3cf15 CheezerWheezer/Lichii: not for Orchid: The clash comes from new FSR 4 headers that Orchid does not have; the workflow part is CI.
+d28688edb chuppatricky/Lichii: not for Orchid: The clash is from another fork's merge (vk_flash_watch.cpp, not in Orchid); Orchid builds without it.
+0c3d77c37 ThatGuyMcd/Lichii-TGM: not for Orchid: FSR is not in Orchid (no fsr4 or SetupAmdFfx code under src); nothing for supported games.
+3674742d5 GoatTech-42/Lichii: not for Orchid: Windows-only driver case; the query is unused in Orchid's src/video_core/vulkan_common/vulkan_device.h.
+602669114 xc0f0c0bx/Lichii: not for Orchid: Windows-only driver workaround (vulkan_device.cpp:656-660 in Orchid has the Windows-wide disable).
+98018f36e ThatGuyMcd/Lichii-TGM: not for Orchid: Portability layer for macOS/MoltenVK; Orchid's target is Linux and Windows.
+dda41f391 peigongdsd/Lichii: not for Orchid: Windows-only; Orchid check is at vulkan_device.cpp:656-660.
+8aa88353f blackxzin/Lichii: not for Orchid: Orchid has no pipelineCreationCacheControl reference (grep empty in src/video_core); the commit changes no runtime behaviour.
+e39708c65 pavelgajdo/Hokkaido: not for Orchid: Android-only code (#ifdef in GetDeviceMemoryBudget); Orchid's target platforms are Linux and Windows.
+5d1ce7d9c pavelgajdo/Hokkaido: not for Orchid: Android-only code path in CollectPhysicalMemoryInfo.
+fb8165cbe remora24/Lichii: not for Orchid: Its stated purpose is FSR 4, which Orchid does not have (no fsr4 code under src).
+0a8b5cf4a SimonSant/Lichii: not for Orchid: Opt-in knob with the default untouched (vulkan_device.h:395-397 unchanged in Orchid); nothing to port for supported games.
+2f1b10405 vouion/Lichii: not for Orchid: Logging-only diagnostic; Orchid's Check() in src/video_core/vulkan_common/vulkan_wrapper.h has no such print, and nothing for supported games changes.
+7e213f015 Deathnetworks/Lichii: not for Orchid: Orchid has no CooperativeMatrixPropertiesKHR anywhere in src/video_core/vulkan_common and no caller needs it; the commit is a build-check fix for the ...
+861e5bd65 JuliusBairaktaris/Lichii: not for Orchid: Diagnostic message text only; Orchid's Exception in src/video_core/vulkan_common/vulkan_wrapper.cpp has no location, and no supported game's ...
+b6137573f ThatGuyMcd/Lichii-TGM: not for Orchid: Windows-only code under #ifdef _WIN32; Orchid's target platforms are Linux and Windows, and this only silences a validation message.
+e288abc2a vouion/Lichii: not for Orchid: Logging-only diagnostic; Orchid's texture_cache.h has no such trace and needs none for supported games.
+d19972e4a celmax85/Lichii: not for Orchid: The trace is logging-only, and the clamp is a default-off experiment aimed at one game (Ocarina tree leaves); nothing changes by default.
+89206b572 FelipeMzero/Lichii: not for Orchid: The guard is defensive (the NVIDIA-only device-diagnostics extension is absent on AMD anyway); the rest is UI, translations and build files.
+043d8d694 madebyjordan/Lichii-Hyrule: not for Orchid: Logging-only diagnostic (the commit title says LOCAL TEST ONLY); Orchid's vulkan_memory_allocator.cpp has no such callbacks and nothing for supported ...
+adac5bc22 JulesB40/Lichii-testing: not for Orchid: Android-only path (#ifdef __ANDROID__); Orchid's target platforms are Linux and Windows, and Orchid's shaderInt64 switch at vulkan_device.cpp:547 is ...
+b1c12aefe daniel-lynch/Lichii: not for Orchid: vulkan_device.cpp:600 Orchid has no TensorCoopmatRequested / tensor coopmat path at all
+24c8b1cf9 daniel-lynch/Lichii: not for Orchid: no shader_archive_environment.* in Orchid, depends on program_capture/override
+6dcc4a1da daniel-lynch/Lichii: already in main: nup_container.cpp:611 Orchid allows one parent per dir (e2ac483595), same OOM fixed
+6704e0593 daniel-lynch/Lichii: not for Orchid: core_timing.cpp:84 Orchid has slack change; switches are only debug toggles
+72ca8e724 jojo-chaechae/Eglantine: not for Orchid: vk_rasterizer.cpp:1618 Orchid ReleaseFences just WaitPendingFences; no Scheduler::DeferFlush/AllowDeferFlush in vk_scheduler.* so the ...
+445254c16 rdenno/Eglantine: not for Orchid: Orchid buffer_cache.h has no BankPagesChanged/page-shadow code; commit itself reports no fps change
+998979366 rdenno/Eglantine: not for Orchid: vk_rasterizer.cpp:1312 Orchid SubmitNx2ListCopies flushes immediately, but fork change depends on Scheduler::DeferFlush/FenceFlush/idle hook which ...
+dfdf19020 rdenno/Eglantine: not for Orchid: Orchid dev PC is AMD (RADV); no driver_shader_cache in src/common; affects only NVIDIA proprietary users
+45d1fdbdf rdenno/Eglantine: not for Orchid: fs_i_storage.cpp:44 Orchid throttles all titles at 40 MB/s (ReadBytesPerSecond) with no Switch 2 exemption, so the HW boot break from unthrottled ...
+d59f7e72b rdenno/Eglantine: not for Orchid: externals/CMake, UI-side crash-dump tooling
+c76e11cd6 sebjager/Eglantine: not for Orchid: no settings_recommendations in Orchid; UI/settings feature, the clamp only applies to Switch 1 titles with Aggressive VRAM mode and is Windows-budget ...
+7b8735fbd sebjager/Eglantine: not for Orchid: src/common/windows/* only, Orchid host is Linux
+788a01070 snowstormxd/Eglantine-mkw-performance: not for Orchid: names only, no behaviour
+ebfc0ea99 snowstormxd/Eglantine-mkw-performance: not for Orchid: name only
+ca77be183 snowstormxd/Eglantine-mkw-performance: not for Orchid: rename only, no behaviour change
+62a118c56 snowstormxd/Eglantine-mkw-performance: not for Orchid: hid_server.cpp only; logging plus a per-aruid bookkeeping tweak with no reported symptom
+def9f0d87 snowstormxd/Eglantine-mkw-performance: not for Orchid: gated on one other game's shader hash, opt-in
+426ba20c9 swizardlv/Eglantine: not for Orchid: vk_pipeline_cache.cpp: Orchid already defaults async off (settings.h:680); rest is PS5-only paths
+5b82ea019 swizardlv/Eglantine: not for Orchid: diagnostic only, PS5
+ed6c88ca7 swizardlv/Eglantine: not for Orchid: logging only
+0fcc413d4 swizardlv/Eglantine: not for Orchid: Orchid has no macro_turing_jit.h / EDEN_NX2_MME_JIT (ls src/video_core), nothing to disable
+4b35530f9 swizardlv/Eglantine: not for Orchid: gated on OoT program id
+0cad91416 swizardlv/Eglantine: not for Orchid: motivated by a PS5 4K display mode and the OoT stripe, which was later shown to be guest-baked (see 4b35530f95); no supported-game symptom
+d6c490402 swizardlv/Eglantine: already in main: nx2_gsv.h:366,449 Orchid registers gpu 41 and returns a device id (u32), a different, fuller implementation (Fire Emblem origin); diagnostic part is ...
+354bc0ddc swizardlv/Eglantine: already in main: nx2_gsv.h:449 real gpu 41 returning a device id; nx2_gsv.h:3125,3201 gsv 434 AttachGpuAddressSpace with address-space bookkeeping (nx2:gpu 33 ids), ...
+6cd57cd79 vv4k4l/Eglantine: not for Orchid: not looked at in detail; not a discrete fix, applies:no, 455 lines mixed
+b10a7ed25 vv4k4l/Eglantine: not for Orchid: not a discrete fix
+3d712070f vv4k4l/Eglantine: not for Orchid: Orchid has no dk_dynamic_fps/dk_30fps (grep src empty); Bananza fps handled via common/game_fps.h; a 30 fps lock is a user option, not a fix
+632c2c50f vv4k4l/Eglantine: not for Orchid: all driver parts are #ifdef _WIN32 / VK_DRIVER_ID_AMD_PROPRIETARY; Orchid is Linux RADV. Only the translate_program.cpp 2-line reset (mask.reset, ...
+cc52a0a6b vv4k4l/Eglantine: not for Orchid: Orchid has no presented_frames/PresentedFrameCount (grep empty); frame-gen statusbar only
+de4bc02f0 vv4k4l/Eglantine: not for Orchid: block does not exist in Orchid (grep dk_dynamic_fps empty); only relevant together with 1497448d74
+d2614b56f vv4k4l/Eglantine: not for Orchid: MKW only, EDEN_MKW_MOVIE_UNPACED default off
+61fe7b9a3 vv4k4l/Eglantine: not for Orchid: UI/branding/CI only
+d4a4c8c0e vv4k4l/Eglantine: not for Orchid: build/CI
+c9636a49c vv4k4l/Eglantine: not for Orchid: UI/migration
+909d7f2fc vv4k4l/Eglantine: not for Orchid: already derived from Orchid; presets header of the fork
+908642b80 vv4k4l/Eglantine: not for Orchid: UI/preset feature
+99139e43b vv4k4l/Eglantine: already in main: Orchid vk_pipeline_cache.cpp:1390-1392 has the identical guard
+660a19845 vv4k4l/Eglantine: not for Orchid: opt-in diagnostics knobs, no default behaviour change
+3ce64ebbe vv4k4l/Eglantine: already in main: Orchid core_timing.cpp:158-172 already has the earliest-event wake; the coarse sleep targets Windows MWAITX/UMWAIT and Orchid Linux Event::WaitFor ...
+3767bc260 vv4k4l/Eglantine: not for Orchid: Orchid has no PeekAcquire/EDEN_NX2_ACQUIRE_PEEK (grep empty); only a tweak of a Selevet feature Orchid lacks
+b746e2739 vv4k4l/Eglantine: not for Orchid: frame generation feature, UI
+f941f897d puppywang/Lichii: already in main: alias tick check in SynchronizeAliases (texture_cache.h)
+50c350740 rakefire-impala/Lichii: already in main: depth-compare textures get a float sampled type (texture_pass.cpp)
+679ce4a4e zortos293/Eglantine: already in main: depth-compare image type (texture_pass.cpp)
+4f3506c4c mariohbd/Lichii: already in main: dead timing events are popped (core_timing.cpp)
