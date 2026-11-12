@@ -155,3 +155,14 @@ TEST_CASE("Ampere register shadowing covers P2R, uniform I2FP and indexed LDC",
     CheckSpan(With(load, 24, 8), 16, 2);
     CheckSpan(With(With(load, 24, 8), 73, 4, 3), 16, 1);
 }
+
+TEST_CASE("Ampere register shadowing covers SHF with a register, cbuf or uniform amount",
+          "[video_core][ampere][pressure]") {
+    // SHF.R.U32.HI R225, RZ, R220, R234 and SHF.L.U32 R225, R224, R220, RZ.
+    CheckShadowed({{0xffe17219, 0xdc, 0x00011eea, 0}}, {{16, 1}, {24, 1}, {32, 1}, {64, 1}});
+    CheckShadowed({{0xe0e17219, 0xdc, 0x000006ff, 0}}, {{16, 1}, {24, 1}, {32, 1}, {64, 1}});
+    // SHF.L.W.U32 R225, R224, UR6 / c[0x3][0x10], RZ and SHF.R.U32.HI R225, RZ, UR6, R234.
+    CheckShadowed({{0xe0e17c19, 0x06, 0x08000eff, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+    CheckShadowed({{0xe0e17a19, 0x00c00400, 0x00000eff, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+    CheckShadowed({{0xffe17c19, 0x06, 0x08011eea, 0}}, {{16, 1}, {24, 1}, {64, 1}});
+}
