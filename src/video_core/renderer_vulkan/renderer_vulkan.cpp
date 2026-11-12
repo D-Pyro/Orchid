@@ -299,6 +299,10 @@ vk::Buffer RendererVulkan::RenderToBuffer(std::span<const Tegra::FramebufferConf
                                           VkDeviceSize buffer_size) {
     auto frame = [&]() {
         Frame f{};
+        // Without the size, DrawToFrame takes every capture for a resize: a device wait-idle and
+        // a rebuilt window adapt pass, layers and frame image each time.
+        f.width = layout.width;
+        f.height = layout.height;
         f.image =
             CreateWrappedImage(memory_allocator, VkExtent2D{layout.width, layout.height}, format);
         f.image_view = CreateWrappedImageView(device, f.image, format);
