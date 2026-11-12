@@ -28,6 +28,7 @@ add_executable(tests
     common/undefined_fix.cpp
     common/unique_function.cpp
     common/zstd_compression.cpp
+    audio_core/adpcm_decode.cpp
     core/address_arbiter_read.cpp
     core/address_space.cpp
     core/core_timing.cpp
