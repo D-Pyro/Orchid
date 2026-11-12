@@ -1072,6 +1072,35 @@ TEST_CASE("NUP falls back from incomplete edition programs", "[nup]") {
     }
 }
 
+TEST_CASE("NUP writer does not promote an incomplete consolidated program1 ExeFS", "[nup]") {
+    constexpr u64 Switch1 = 0x010015100B514000ULL;
+    TempDir t;
+    const auto root = t.path / "Wonder";
+    Put(root / "base/exefs/main", "Switch 1 base main");
+    Put(root / "base/exefs/main.npdm", Npdm(Switch1));
+    Put(root / "base/romfs/base.bin", "base data");
+
+    const auto update = root / "updates/327680";
+    Put(update / "exefs/main", "Switch 1 update main");
+    Put(update / "exefs/main.npdm", NativeNpdm(Switch1));
+    Put(update / "romfs/update.bin", "Switch 1 update data");
+    Put(update / "program1/exefs/main", "incomplete edition main"); // Missing main.npdm.
+    Put(update / "program1/romfs/System/RegionLangMask.txt", "orphan edition romfs");
+
+    const auto archive = t.path / "Wonder-incomplete.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    FileSys::RealVfsFilesystem real;
+    NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+    const auto update_index = nup.FindEnabledUpdatePackage();
+    REQUIRE(update_index);
+    CHECK(nup.GetPackages()[*update_index].title_id == Switch1);
+    REQUIRE(nup.GetExeFSDir(*update_index));
+    CHECK(Read(nup.GetExeFSDir(*update_index)->GetFile("main")) == "Switch 1 update main");
+    CHECK(nup.GetEditionRomFSDir(*update_index) == nullptr);
+    CHECK(nup.GetLegacyExeFSDir(*update_index) == nullptr);
+}
+
 TEST_CASE("NUP UI metadata belongs to each container and never invents a base update", "[nup]") {
     TempDir t;
     FileSys::RealVfsFilesystem real;
@@ -1810,13 +1839,15 @@ TEST_CASE("NUP ExecuteProgram into index 0 boots the Switch 1 program of an edit
     constexpr u64 Switch1 = 0x010015100B514000ULL;
     TempDir t;
     FileSys::RealVfsFilesystem real;
-    const auto build = [&](bool legacy_exefs) {
+    const auto build = [&](bool legacy_exefs, bool edition_romfs = true) {
         std::map<std::string, std::string> update{
             {"romfs/System/AddressTable", "nx update"},
             {"romfs/update.bin", "update"},
             {"program1/exefs/main", "native main"},
-            {"program1/exefs/main.npdm", Npdm(Edition)},
-            {"program1/romfs/System/RegionLangMask.txt", "mask"}};
+            {"program1/exefs/main.npdm", Npdm(Edition)}};
+        if (edition_romfs) {
+            update["program1/romfs/System/RegionLangMask.txt"] = "mask";
+        }
         if (legacy_exefs) {
             update["exefs/main"] = "nx update main";
             update["exefs/main.npdm"] = NativeNpdm(Switch1);
@@ -1889,6 +1920,46 @@ TEST_CASE("NUP ExecuteProgram into index 0 boots the Switch 1 program of an edit
         // The base NPDM here is not a full META header: the program index 0 ID stands in.
         CHECK(program_id == 0x040015100B514000ULL);
         const auto tree = romfs_of(loader);
+        CHECK(tree->GetFile("base.bin"));
+        CHECK_FALSE(tree->GetFile("update.bin"));
+    }
+
+    SECTION("program index zero still selects the legacy ExeFS without an edition RomFS") {
+        const auto archive = build(true, false);
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        CHECK(nup.IsEditionProgram(1));
+        CHECK(nup.GetEditionRomFSDir(1) == nullptr);
+        const auto edition = Loader::SelectNupBootProgram(nup, std::nullopt);
+        CHECK(edition.edition_program);
+        REQUIRE(edition.exefs);
+        CHECK(Read(edition.exefs->GetFile("main")) == "native main");
+
+        const auto switch1 = Loader::SelectNupBootProgram(nup, 0);
+        REQUIRE(switch1.exefs);
+        CHECK(Read(switch1.exefs->GetFile("main")) == "nx update main");
+        CHECK(switch1.switch1_program);
+        CHECK_FALSE(switch1.base_romfs_only);
+    }
+
+    SECTION("program index zero falls back to the base ExeFS without an edition RomFS") {
+        const auto archive = build(false, false);
+        NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+        REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+        CHECK(nup.IsEditionProgram(1));
+        CHECK(nup.GetEditionRomFSDir(1) == nullptr);
+
+        const auto switch1 = Loader::SelectNupBootProgram(nup, 0);
+        REQUIRE(switch1.exefs);
+        CHECK(Read(switch1.exefs->GetFile("main")) == "nx main");
+        CHECK(switch1.switch1_program);
+        CHECK(switch1.base_romfs_only);
+
+        Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read), 0};
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        const auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
         CHECK(tree->GetFile("base.bin"));
         CHECK_FALSE(tree->GetFile("update.bin"));
     }

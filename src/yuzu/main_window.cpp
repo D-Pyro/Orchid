@@ -3380,8 +3380,7 @@ void MainWindow::OnExecuteProgram(std::size_t program_index) {
     ShutdownGame();
 
     auto params = ApplicationAppletParameters();
-    params.program_index = static_cast<s32>(program_index);
-    params.launch_type = Service::AM::LaunchType::ApplicationInitiated;
+    params.SetApplicationInitiatedProgramSwitch(static_cast<s32>(program_index));
 
     if (previous_program_id > static_cast<u64>(Service::AM::AppletProgramId::MaxProgramId)) {
         params.previous_program_index =

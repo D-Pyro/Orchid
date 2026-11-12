@@ -133,6 +133,11 @@ fs::path FindDirectory(const fs::path& parent, std::string_view name) {
     return {};
 }
 
+bool HasCompleteExeFS(const fs::path& package) {
+    const auto exefs = FindDirectory(package, "exefs");
+    return !exefs.empty() && IsFile(exefs / "main") && IsFile(exefs / "main.npdm");
+}
+
 std::optional<u64> ParseDecimal(const std::string& name) {
     u64 value{};
     const auto* end = name.data() + name.size();
@@ -477,6 +482,21 @@ Layout BuildLayout(const Plan& plan) {
         file_counts[i] = total;
     }
 
+    const auto has_file = [&layout](u32 directory, std::string_view name) {
+        const auto& dir = layout.dirs[directory];
+        for (u32 slot = dir.first_child; slot < dir.first_child + dir.child_count; ++slot) {
+            const u64 child = layout.children[slot];
+            if ((child & Layout::FileTag) == 0) {
+                continue;
+            }
+            const auto file = static_cast<u32>(child);
+            if (Lower(layout.files[file].name) == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     for (std::size_t i = 0; i < layout.packages.size(); ++i) {
         const auto& root_dir = layout.dirs[layout.packages[i].root_dir];
         auto& package = layout.packages[i];
@@ -505,7 +525,8 @@ Layout BuildLayout(const Plan& plan) {
                     continue;
                 }
                 const auto id = static_cast<u32>(child);
-                if (Lower(layout.dirs[id].name) == "exefs" && file_counts[id] > 0) {
+                if (Lower(layout.dirs[id].name) == "exefs" && has_file(id, "main") &&
+                    has_file(id, "main.npdm")) {
                     // Keep the legacy root exefs/ in the package tree for ExecuteProgram(0),
                     // but point normal NUP boots at the native program1 executable.
                     package.exefs_dir = id;
@@ -756,9 +777,11 @@ private:
 
         const auto exefs = FindDirectory(dir, "exefs");
         const auto program1 = FindDirectory(dir, "program1");
-        const auto edition_exefs = FindDirectory(program1, "exefs");
-        const auto metadata_exefs = edition_exefs.empty() ? exefs : edition_exefs;
-        const auto metadata_dir = edition_exefs.empty() ? dir : program1;
+        const bool complete_edition = HasCompleteExeFS(program1);
+        const auto edition_exefs =
+            complete_edition ? FindDirectory(program1, "exefs") : fs::path{};
+        const auto metadata_exefs = complete_edition ? edition_exefs : exefs;
+        const auto metadata_dir = complete_edition ? program1 : dir;
         const auto romfs = FindDirectory(dir, "romfs");
         fs::path npdm_path = metadata_exefs.empty() ? fs::path{} : metadata_exefs / "main.npdm";
         if (!IsFile(npdm_path)) {

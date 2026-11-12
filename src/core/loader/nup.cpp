@@ -132,11 +132,12 @@ NupBootProgram SelectNupBootProgram(FileSys::NupContainer& nup,
         return boot;
     }
     boot.exefs = nup.GetExeFSDir(*exefs_index);
+    boot.edition_program = nup.IsEditionProgram(*exefs_index);
     boot.edition_romfs = nup.GetEditionRomFSDir(*exefs_index);
 
     // ExecuteProgram into index 0 of a Switch 2 Edition runs its Switch 1 program: the legacy
     // ExeFS packed next to program1, else the base program with the base data it was built for.
-    if (switched_index == std::size_t{0} && boot.edition_romfs != nullptr) {
+    if (switched_index == std::size_t{0} && boot.edition_program) {
         boot.edition_romfs = nullptr;
         if (auto legacy = nup.GetLegacyExeFSDir(*exefs_index)) {
             boot.exefs = std::move(legacy);
@@ -169,7 +170,7 @@ AppLoader_NUP::AppLoader_NUP(FileSys::VirtualFile file_, std::optional<std::size
     // A consolidated Switch 2 Edition keeps the Switch 1 package as the base and stores the
     // running program in the update. Use that package's ID for normal boots; the index-0 path
     // below replaces it with the legacy ExeFS's program ID.
-    if (boot.edition_romfs != nullptr && boot.update_index) {
+    if (boot.edition_program && boot.update_index) {
         base_title_id = nup->GetPackages()[*boot.update_index].title_id;
     }
     has_program = true;

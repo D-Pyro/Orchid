@@ -30,9 +30,12 @@ std::vector<std::pair<u64, FileSys::VirtualDir>> FindLooseSiblingPrograms(
 
 /// The main NSO an ExecuteProgram restart into `program_index` boots from a loose Switch 2
 /// Edition dump: the Switch 1 program (index 0) next to a program1 package, or program1
-/// (index 1) from the Switch 1 program. nullptr when the dump has no such program.
+/// (index 1) from the Switch 1 program. Sets `base_romfs_only` when index 0 falls back to the
+/// base ExeFS because there is no matching Switch 1 update executable. nullptr when no such
+/// program exists.
 FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
-                                          std::size_t program_index);
+                                          std::size_t program_index,
+                                          bool* base_romfs_only = nullptr);
 
 /**
  * This class loads a "deconstructed ROM directory", which are the typical format we see for Switch
@@ -42,7 +45,9 @@ FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
  */
 class AppLoader_DeconstructedRomDirectory final : public AppLoader {
 public:
-    explicit AppLoader_DeconstructedRomDirectory(FileSys::VirtualFile main_file, bool override_update_ = false);
+    explicit AppLoader_DeconstructedRomDirectory(FileSys::VirtualFile main_file,
+                                                 bool override_update_ = false,
+                                                 bool base_romfs_only_ = false);
     // Overload to accept exefs directory. Must contain 'main' and 'main.npdm'
     explicit AppLoader_DeconstructedRomDirectory(FileSys::VirtualDir directory, bool override_update_ = false);
 
@@ -89,6 +94,8 @@ private:
     std::string romfs_version;            ///< "1.8.0" from the RomFS's Product.180 tables, if any
     u64 title_id{};
     bool override_update;
+    /// Program index 0 fell back to the base ExeFS, so newer update RomFS tiers must not be used.
+    bool base_romfs_only{};
 
     Modules modules;
 };

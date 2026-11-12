@@ -22,13 +22,14 @@ struct NupBootProgram {
     std::optional<std::size_t> program_index; ///< Package whose title the program runs under
     std::optional<std::size_t> update_index;  ///< Enabled update, layered over the base
     FileSys::VirtualDir exefs;                ///< The ExeFS that boots
+    bool edition_program{};                   ///< The ExeFS is program1, even without an own RomFS
     FileSys::VirtualDir edition_romfs;        ///< A Switch 2 Edition program's own RomFS
     bool switch1_program{};                   ///< ExecuteProgram into the Switch 1 program
     bool base_romfs_only{};                   ///< That program is the base one, without update
 };
 
-/// Chooses the boot ExeFS; `switched_index` is the program index an ExecuteProgram restart
-/// switches to (see SwitchedProgramIndex).
+/// Chooses the boot ExeFS; `switched_index` is the program index explicitly requested by an
+/// application-initiated ExecuteProgram restart.
 NupBootProgram SelectNupBootProgram(FileSys::NupContainer& nup,
                                     std::optional<std::size_t> switched_index);
 

@@ -421,15 +421,18 @@ static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileSys::V
         return std::make_unique<AppLoader_NUP>(std::move(file), switched_index);
 
     // NX deconstructed ROM directory.
-    case FileType::DeconstructedRomDirectory:
+    case FileType::DeconstructedRomDirectory: {
+        bool base_romfs_only = false;
         if (switched_index) {
-            if (auto other = FindLooseProgramMain(file, *switched_index)) {
+            if (auto other = FindLooseProgramMain(file, *switched_index, &base_romfs_only)) {
                 LOG_INFO(Loader, "Program index {} boots {}", *switched_index,
                          other->GetFullPath());
                 file = std::move(other);
             }
         }
-        return std::make_unique<AppLoader_DeconstructedRomDirectory>(std::move(file));
+        return std::make_unique<AppLoader_DeconstructedRomDirectory>(std::move(file), false,
+                                                                      base_romfs_only);
+    }
 
     default:
         return nullptr;
@@ -471,14 +474,6 @@ std::unique_ptr<AppLoader> GetLoader(Core::System& system, FileSys::VirtualFile 
 
     return GetFileLoader(system, std::move(file), type, program_id, program_index,
                          switched_index);
-}
-
-std::optional<std::size_t> SwitchedProgramIndex(s32 previous_program_index, s32 program_index) {
-    if (previous_program_index < 0 || program_index < 0 ||
-        previous_program_index == program_index) {
-        return std::nullopt;
-    }
-    return static_cast<std::size_t>(program_index);
 }
 
 } // namespace Loader

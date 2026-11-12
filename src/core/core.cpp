@@ -374,8 +374,7 @@ struct System::Impl {
             fs_controller.InitTempStorage();
         }
 
-        const auto switched_index =
-            Loader::SwitchedProgramIndex(params.previous_program_index, params.program_index);
+        const auto switched_index = params.switched_program_index;
         const bool switch2_program =
             virtual_filesystem != nullptr &&
             IsSwitch2Program(system, virtual_filesystem, filepath, params.program_id,

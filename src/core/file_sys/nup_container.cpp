@@ -980,15 +980,20 @@ VirtualDir NupContainer::GetRomFSDir(std::size_t package_index) {
     return romfs_dir_cache[package_index];
 }
 
-VirtualDir NupContainer::GetEditionRomFSDir(std::size_t package_index) {
+bool NupContainer::IsEditionProgram(std::size_t package_index) const {
     if (package_index >= packages.size() || packages[package_index].exefs_dir == NoDir) {
-        return nullptr;
+        return false;
     }
     const auto& package = packages[package_index];
     const u32 program1 = FindChildDir(package.root_dir, "program1");
-    if (program1 == NoDir || FindChildDir(program1, "exefs") != package.exefs_dir) {
+    return program1 != NoDir && FindChildDir(program1, "exefs") == package.exefs_dir;
+}
+
+VirtualDir NupContainer::GetEditionRomFSDir(std::size_t package_index) {
+    if (!IsEditionProgram(package_index)) {
         return nullptr;
     }
+    const u32 program1 = FindChildDir(packages[package_index].root_dir, "program1");
     const u32 romfs = FindChildDir(program1, "romfs");
     return romfs != NoDir ? BuildPackageDir(romfs) : nullptr;
 }

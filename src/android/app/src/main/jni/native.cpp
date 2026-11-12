@@ -312,10 +312,11 @@ Core::SystemResultStatus EmulationSession::InitializeEmulation(const std::string
     ConfigureFilesystemProvider(filepath);
 
     // Load the ROM.
+    const u64 pending_program_id = m_next_program_id.exchange(0);
     const u64 previous_program_id =
-        program_index != 0 && m_next_program_id.load() >
-                                  static_cast<u64>(Service::AM::AppletProgramId::MaxProgramId)
-            ? m_next_program_id.load()
+        !frontend_initiated && pending_program_id >
+                                   static_cast<u64>(Service::AM::AppletProgramId::MaxProgramId)
+            ? pending_program_id
             : 0;
 
     Service::AM::FrontendAppletParameters params{
@@ -330,6 +331,9 @@ Core::SystemResultStatus EmulationSession::InitializeEmulation(const std::string
                                    FileSys::GetBaseTitleID(previous_program_id))
                 : -1,
     };
+    if (!frontend_initiated) {
+        params.SetApplicationInitiatedProgramSwitch(static_cast<s32>(program_index));
+    }
 
     m_load_result = m_system.Load(EmulationSession::GetInstance().Window(), filepath, params);
     if (m_load_result != Core::SystemResultStatus::Success) {

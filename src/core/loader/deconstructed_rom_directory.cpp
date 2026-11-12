@@ -251,7 +251,10 @@ FileSys::VirtualFile PackageMainFile(const FileSys::VirtualDir& package) {
 } // namespace
 
 FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
-                                          std::size_t program_index) {
+                                          std::size_t program_index, bool* base_romfs_only) {
+    if (base_romfs_only != nullptr) {
+        *base_romfs_only = false;
+    }
     const auto exefs = main != nullptr ? main->GetContainingDirectory() : nullptr;
     const auto package = exefs != nullptr ? exefs->GetParentDirectory() : nullptr;
     if (package == nullptr) {
@@ -270,7 +273,11 @@ FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
         if (auto legacy = PackageMainFile(version)) {
             return legacy;
         }
-        return PackageMainFile(FindLooseBaseDirectory(exefs));
+        const auto base = PackageMainFile(FindLooseBaseDirectory(exefs));
+        if (base != nullptr && base_romfs_only != nullptr) {
+            *base_romfs_only = true;
+        }
+        return base;
     }
     if (program_index == 1 && !EqualsIgnoreCase(package->GetName(), "program1")) {
         // Back to the edition: the program1 package of this version folder, or of the newest
@@ -311,7 +318,8 @@ namespace {
 // program index 0 (FindLooseSiblingPrograms). Games probe for this: Super Mario Bros. Wonder
 // mounts program 0 and its upgrade pack only when content:/System/AddressTable is missing,
 // and without them its Switch 2 heap table is absent and boot ends in a null allocation.
-FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
+FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir,
+                                   bool base_romfs_only = false) {
     if (exefs_dir == nullptr) {
         return nullptr;
     }
@@ -351,41 +359,47 @@ FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
         // against 2.0.1 data boots and then writes to unmapped memory in a loop
         // (Pokopia: 2012 invalid byte writes). With tiers below, the next tier can still
         // backfill its own data instead of refusing the RomFS outright.
-        for (const auto name : {std::string_view{"updates"}, std::string_view{"upgrade"}}) {
-            const auto update_storage = storage->GetSubdirectory(name);
-            bool found_update = false;
-            for (const auto& [version, version_dir] : OrderedUpdateVersionDirs(update_storage)) {
-                const auto candidate = FindLooseRomFSDirectory(version_dir);
-                if (candidate == nullptr) {
-                    continue;
+        if (!base_romfs_only) {
+            for (const auto name : {std::string_view{"updates"}, std::string_view{"upgrade"}}) {
+                const auto update_storage = storage->GetSubdirectory(name);
+                bool found_update = false;
+                for (const auto& [version, version_dir] :
+                     OrderedUpdateVersionDirs(update_storage)) {
+                    const auto candidate = FindLooseRomFSDirectory(version_dir);
+                    if (candidate == nullptr) {
+                        continue;
+                    }
+                    const auto update_main_size =
+                        ExeFSMainSize(version_dir->GetSubdirectory("exefs"));
+                    const auto running_main_size = ExeFSMainSize(exefs_dir);
+                    // A program kept inside this version folder (updates/<version>/program1) is
+                    // the native edition built on top of that update's data, so its RomFS tier
+                    // always belongs; the size check only guards a program from elsewhere.
+                    // The wrapped layout updates/<version>/program/program1 has one more level.
+                    auto program_dir = parent->GetParentDirectory();
+                    if (program_dir != nullptr &&
+                        equals_ignore_case(program_dir->GetName(), "program")) {
+                        program_dir = program_dir->GetParentDirectory();
+                    }
+                    const bool own_version =
+                        program_dir != nullptr && version_dir != nullptr &&
+                        program_dir->GetFullPath() == version_dir->GetFullPath();
+                    if (!own_version && running_main_size != 0 && update_main_size != 0 &&
+                        running_main_size != update_main_size) {
+                        LOG_ERROR(Loader,
+                                  "Update RomFS (version {}) belongs to a different build "
+                                  "(running main {} bytes, update main {} bytes); skipping the "
+                                  "update tier",
+                                  version, running_main_size, update_main_size);
+                        continue;
+                    }
+                    update_romfs = candidate;
+                    found_update = true;
+                    break;
                 }
-                const auto update_main_size = ExeFSMainSize(version_dir->GetSubdirectory("exefs"));
-                const auto running_main_size = ExeFSMainSize(exefs_dir);
-                // A program kept inside this version folder (updates/<version>/program1) is
-                // the native edition built on top of that update's data, so its RomFS tier
-                // always belongs; the size check only guards a program from elsewhere.
-                // The wrapped layout updates/<version>/program/program1 has one more level.
-                auto program_dir = parent->GetParentDirectory();
-                if (program_dir != nullptr && equals_ignore_case(program_dir->GetName(), "program")) {
-                    program_dir = program_dir->GetParentDirectory();
+                if (found_update) {
+                    break;
                 }
-                const bool own_version =
-                    program_dir != nullptr && version_dir != nullptr &&
-                    program_dir->GetFullPath() == version_dir->GetFullPath();
-                if (!own_version && running_main_size != 0 && update_main_size != 0 &&
-                    running_main_size != update_main_size) {
-                    LOG_ERROR(Loader,
-                              "Update RomFS (version {}) belongs to a different build (running "
-                              "main {} bytes, update main {} bytes); skipping the update tier",
-                              version, running_main_size, update_main_size);
-                    continue;
-                }
-                update_romfs = candidate;
-                found_update = true;
-                break;
-            }
-            if (found_update) {
-                break;
             }
         }
 
@@ -616,9 +630,11 @@ std::vector<std::pair<u64, FileSys::VirtualDir>> FindLooseSiblingPrograms(
     return out;
 }
 
-AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(FileSys::VirtualFile file_, bool override_update_)
+AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(
+    FileSys::VirtualFile file_, bool override_update_, bool base_romfs_only_)
     : AppLoader(std::move(file_))
     , override_update(override_update_)
+    , base_romfs_only(base_romfs_only_)
 {
     const auto file_dir = file->GetContainingDirectory();
     // Title ID
@@ -704,7 +720,7 @@ AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(
 const FileSys::VirtualFile& AppLoader_DeconstructedRomDirectory::LooseRomFS() {
     if (!romfs_resolved) {
         romfs_resolved = true;
-        romfs = FindLooseRomFS(romfs_exefs_dir);
+        romfs = FindLooseRomFS(romfs_exefs_dir, base_romfs_only);
     }
     return romfs;
 }

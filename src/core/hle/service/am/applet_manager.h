@@ -7,7 +7,9 @@
 #pragma once
 
 #include <condition_variable>
+#include <cstddef>
 #include <mutex>
+#include <optional>
 
 #include "core/hle/service/am/am_types.h"
 
@@ -35,6 +37,16 @@ struct FrontendAppletParameters {
     LaunchType launch_type{};
     s32 program_index{};
     s32 previous_program_index{-1};
+    std::optional<std::size_t> switched_program_index;
+
+    void SetApplicationInitiatedProgramSwitch(s32 index) {
+        launch_type = LaunchType::ApplicationInitiated;
+        program_index = index;
+        switched_program_index = std::nullopt;
+        if (index >= 0) {
+            switched_program_index = static_cast<std::size_t>(index);
+        }
+    }
 };
 
 class AppletManager {

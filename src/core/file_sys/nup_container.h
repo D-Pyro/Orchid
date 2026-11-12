@@ -168,6 +168,8 @@ public:
 
     VirtualDir GetExeFSDir(std::size_t package_index);
     VirtualDir GetRomFSDir(std::size_t package_index);
+    /// Whether this package boots program1/exefs, independently of whether it has a program1/romfs.
+    bool IsEditionProgram(std::size_t package_index) const;
     /// The own RomFS of a Switch 2 Edition program packed as <package>/program1 next to the
     /// legacy data: program1/romfs when the package boots program1/exefs, else nullptr.
     VirtualDir GetEditionRomFSDir(std::size_t package_index);

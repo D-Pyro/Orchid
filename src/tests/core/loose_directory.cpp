@@ -16,6 +16,7 @@
 #include "core/file_sys/romfs.h"
 #include "core/file_sys/registered_cache.h"
 #include "core/file_sys/romfs_factory.h"
+#include "core/hle/service/am/applet_manager.h"
 #include "core/hle/service/filesystem/filesystem.h"
 #include "core/loader/loader.h"
 #include "qt_common/game_list/discovery.h"
@@ -518,19 +519,35 @@ TEST_CASE("Loose program1 packages mount their own RomFS and serve the Switch 1 
 
 TEST_CASE("ExecuteProgram restarts switch between the edition and its Switch 1 program",
           "[loose_directory]") {
-    // A frontend boot leaves the previous program index at -1, whatever program ID it passes.
-    CHECK_FALSE(Loader::SwitchedProgramIndex(-1, 0));
-    CHECK_FALSE(Loader::SwitchedProgramIndex(-1, 1));
-    CHECK_FALSE(Loader::SwitchedProgramIndex(1, 1));
-    CHECK_FALSE(Loader::SwitchedProgramIndex(1, -1));
-    CHECK(Loader::SwitchedProgramIndex(1, 0) == std::size_t{0});
-    CHECK(Loader::SwitchedProgramIndex(0, 1) == std::size_t{1});
+    Service::AM::FrontendAppletParameters switch_params;
+    CHECK_FALSE(switch_params.switched_program_index);
+    switch_params.SetApplicationInitiatedProgramSwitch(1);
+    CHECK(switch_params.launch_type == Service::AM::LaunchType::ApplicationInitiated);
+    REQUIRE(switch_params.switched_program_index);
+    CHECK(*switch_params.switched_program_index == 1);
+
+    // The requested program remains explicit when its ID/index is zero, even if the previous
+    // program ID is unavailable (Android) or is already program 0 (a same-index restart).
+    switch_params.previous_program_index = 1;
+    switch_params.SetApplicationInitiatedProgramSwitch(0);
+    REQUIRE(switch_params.switched_program_index);
+    CHECK(*switch_params.switched_program_index == 0);
+    switch_params.previous_program_index = 0;
+    switch_params.SetApplicationInitiatedProgramSwitch(0);
+    REQUIRE(switch_params.switched_program_index);
+    CHECK(*switch_params.switched_program_index == 0);
+    switch_params.previous_program_index = -1;
+    switch_params.SetApplicationInitiatedProgramSwitch(0);
+    REQUIRE(switch_params.switched_program_index);
+    CHECK(*switch_params.switched_program_index == 0);
 
     LooseTestDirectory t;
     const auto game = t.root / "Wonder";
     LooseTestDirectory::ExeFS(game / "base/exefs", "base");
+    LooseTestDirectory::Put(game / "base/romfs/base.bin", "base");
     const auto version = game / "updates/327680";
     LooseTestDirectory::ExeFS(version / "exefs", "update");
+    LooseTestDirectory::Put(version / "romfs/update.bin", "update");
     LooseTestDirectory::ExeFS(version / "program1/exefs", "edition");
     LooseTestDirectory::ExeFS(game / "updates/65536/program1/exefs", "older edition");
 
@@ -553,10 +570,32 @@ TEST_CASE("ExecuteProgram restarts switch between the edition and its Switch 1 p
     CHECK(main_of(version / "program1/exefs/main", 1).empty());
     CHECK(main_of(version / "exefs/main", 0).empty());
     CHECK(main_of(version / "program1/exefs/main", 2).empty());
+    CHECK(main_of(version / "program1/exefs/main", *switch_params.switched_program_index) ==
+          "update");
+    switch_params.previous_program_index = 0;
+    switch_params.SetApplicationInitiatedProgramSwitch(0);
+    CHECK(main_of(version / "program1/exefs/main", *switch_params.switched_program_index) ==
+          "update");
 
     SECTION("without an updated Switch 1 program the base one runs") {
         fs::remove_all(version / "exefs");
         CHECK(main_of(version / "program1/exefs/main", 0) == "base");
+    }
+    SECTION("falling back to the base program keeps newer update data out") {
+        fs::remove_all(version / "exefs");
+        bool base_romfs_only = false;
+        const auto selected = Loader::FindLooseProgramMain(
+            open(version / "program1/exefs/main"), 0, &base_romfs_only);
+        REQUIRE(selected);
+        CHECK(base_romfs_only);
+
+        Loader::AppLoader_DeconstructedRomDirectory loader{selected, false, base_romfs_only};
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        const auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
+        CHECK(tree->GetFile("base.bin"));
+        CHECK_FALSE(tree->GetFile("update.bin"));
     }
     SECTION("a wrapped program1 prefers its program/0 sibling") {
         const auto programs = game / "upgrade/65536/program";
