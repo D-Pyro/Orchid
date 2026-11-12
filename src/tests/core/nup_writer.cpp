@@ -955,6 +955,87 @@ TEST_CASE("NUP packs the preferred edition program with its family DLC", "[nup]"
     REQUIRE(restored.GetRawBytes() == edition_bytes);
 }
 
+TEST_CASE("NUP writer boots consolidated program1 and retains the Switch 1 update ExeFS",
+          "[nup]") {
+    constexpr u64 Switch1 = 0x010015100B514000ULL;
+    constexpr u64 Edition = 0x040015100B514001ULL;
+    constexpr std::string_view LegacyName = "Wonder (Switch 1)";
+    constexpr std::string_view EditionName = "Super Mario Bros. Wonder - Nintendo Switch 2 Edition";
+    TempDir t;
+    const auto root = t.path / "Wonder";
+    const auto put_title = [](const fs::path& path, std::string_view name) {
+        FileSys::NACP control;
+        std::copy(name.begin(), name.end(),
+                  control.raw.language_entries.language_entries[0].application_name.begin());
+        const auto bytes = control.GetRawBytes();
+        Put(path, std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+    };
+    Put(root / "base/exefs/main", "Switch 1 base main");
+    Put(root / "base/exefs/main.npdm", Npdm(Switch1));
+    Put(root / "base/romfs/base.bin", "base data");
+    put_title(root / "base/control/control.nacp", LegacyName);
+
+    const auto update = root / "updates/327680";
+    Put(update / "exefs/main", "Switch 1 update main");
+    Put(update / "exefs/main.npdm", NativeNpdm(Switch1));
+    Put(update / "romfs/update.bin", "Switch 1 update data");
+    put_title(update / "control/control.nacp", LegacyName);
+    Put(update / "program1/exefs/main", "Switch 2 edition main");
+    Put(update / "program1/exefs/main.npdm", NativeNpdm(Edition));
+    Put(update / "program1/romfs/System/RegionLangMask.txt", "edition romfs");
+    put_title(update / "program1/control/Acd_1/control.nacp", EditionName);
+
+    const auto probed = FileSys::Nup::ProbeMetadata(root);
+    CHECK(probed.title_name == EditionName);
+
+    const auto archive = t.path / "Wonder.nup";
+    REQUIRE(FileSys::Nup::PackDump(root, archive) == FileSys::Nup::PackResult::Success);
+    FileSys::RealVfsFilesystem real;
+    NupContainer nup{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    REQUIRE(nup.GetStatus() == Loader::ResultStatus::Success);
+    const auto base = nup.FindBasePackage();
+    const auto selected_update = nup.FindEnabledUpdatePackage();
+    REQUIRE(base);
+    REQUIRE(selected_update);
+    CHECK(nup.GetPackages()[*base].title_id == Switch1);
+    CHECK(nup.GetPackages()[*selected_update].title_id == Edition);
+
+    const auto edition = Loader::SelectNupBootProgram(nup, std::nullopt);
+    REQUIRE(edition.exefs);
+    CHECK(Read(edition.exefs->GetFile("main")) == "Switch 2 edition main");
+    REQUIRE(edition.edition_romfs);
+    CHECK(edition.edition_romfs->GetFileRelative("System/RegionLangMask.txt"));
+    REQUIRE(nup.GetLegacyExeFSDir(*selected_update));
+    CHECK(Read(nup.GetLegacyExeFSDir(*selected_update)->GetFile("main")) ==
+          "Switch 1 update main");
+
+    // ExecuteProgram(0) uses the update's legacy ExeFS, with Switch 1 update data over the base.
+    const auto switch1 = Loader::SelectNupBootProgram(nup, 0);
+    REQUIRE(switch1.exefs);
+    CHECK(Read(switch1.exefs->GetFile("main")) == "Switch 1 update main");
+    CHECK(switch1.switch1_program);
+    CHECK_FALSE(switch1.base_romfs_only);
+    CHECK(switch1.edition_romfs == nullptr);
+    Loader::AppLoader_NUP edition_loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read)};
+    u64 program_id{};
+    REQUIRE(edition_loader.ReadProgramId(program_id) == Loader::ResultStatus::Success);
+    CHECK(program_id == Edition);
+    std::string title;
+    REQUIRE(edition_loader.ReadTitle(title) == Loader::ResultStatus::Success);
+    CHECK(title == EditionName);
+
+    Loader::AppLoader_NUP loader{real.OpenFile(archive.string(), FileSys::OpenMode::Read), 0};
+    REQUIRE(loader.ReadProgramId(program_id) == Loader::ResultStatus::Success);
+    CHECK(program_id == Switch1);
+    FileSys::VirtualFile romfs;
+    REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+    const auto tree = FileSys::ExtractRomFS(romfs);
+    REQUIRE(tree);
+    CHECK(tree->GetFile("base.bin"));
+    CHECK(tree->GetFile("update.bin"));
+    CHECK_FALSE(tree->GetFileRelative("System/RegionLangMask.txt"));
+}
+
 TEST_CASE("NUP falls back from incomplete edition programs", "[nup]") {
     TempDir t;
     const auto root = t.path / "Game";

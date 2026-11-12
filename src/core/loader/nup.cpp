@@ -166,6 +166,12 @@ AppLoader_NUP::AppLoader_NUP(FileSys::VirtualFile file_, std::optional<std::size
 
     const auto& program = nup->GetPackages()[*boot.program_index];
     base_title_id = program.title_id;
+    // A consolidated Switch 2 Edition keeps the Switch 1 package as the base and stores the
+    // running program in the update. Use that package's ID for normal boots; the index-0 path
+    // below replaces it with the legacy ExeFS's program ID.
+    if (boot.edition_romfs != nullptr && boot.update_index) {
+        base_title_id = nup->GetPackages()[*boot.update_index].title_id;
+    }
     has_program = true;
 
     const auto exefs = boot.exefs;

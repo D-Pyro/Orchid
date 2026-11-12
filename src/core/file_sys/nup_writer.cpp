@@ -151,6 +151,12 @@ bool IsProgramVariant(const fs::path& main) {
            Lower(ToUtf8(package.parent_path().filename())) == "program";
 }
 
+// Consolidated cross-generation updates keep program 1 beside the legacy update:
+// updates/<version>/program1/{exefs,romfs}.
+bool IsConsolidatedProgram(const fs::path& main) {
+    return Lower(ToUtf8(main.parent_path().parent_path().filename())) == "program1";
+}
+
 // Share the loose loader's program selection so packing cannot silently select the legacy
 // executable when a usable edition program is present.
 bool HasBootableExeFS(const fs::path& root) {
@@ -474,6 +480,7 @@ Layout BuildLayout(const Plan& plan) {
     for (std::size_t i = 0; i < layout.packages.size(); ++i) {
         const auto& root_dir = layout.dirs[layout.packages[i].root_dir];
         auto& package = layout.packages[i];
+        u32 program1 = NoDir;
         for (u32 slot = root_dir.first_child; slot < root_dir.first_child + root_dir.child_count;
              ++slot) {
             const u64 child = layout.children[slot];
@@ -485,6 +492,25 @@ Layout BuildLayout(const Plan& plan) {
                 package.exefs_dir = id;
             } else if (layout.dirs[id].name == "romfs") {
                 package.romfs_dir = id;
+            } else if (Lower(layout.dirs[id].name) == "program1") {
+                program1 = id;
+            }
+        }
+        if (program1 != NoDir) {
+            const auto& edition = layout.dirs[program1];
+            for (u32 slot = edition.first_child; slot < edition.first_child + edition.child_count;
+                 ++slot) {
+                const u64 child = layout.children[slot];
+                if (child & Layout::FileTag) {
+                    continue;
+                }
+                const auto id = static_cast<u32>(child);
+                if (Lower(layout.dirs[id].name) == "exefs" && file_counts[id] > 0) {
+                    // Keep the legacy root exefs/ in the package tree for ExecuteProgram(0),
+                    // but point normal NUP boots at the native program1 executable.
+                    package.exefs_dir = id;
+                    break;
+                }
             }
         }
     }
@@ -580,6 +606,7 @@ public:
         const auto dlc = FindDirectory(dump_root, "dlc");
         const auto selected = Loader::ResolveLooseProgramPath(dump_root);
         const bool program_variant = selected && IsProgramVariant(*selected);
+        const bool consolidated_program = selected && IsConsolidatedProgram(*selected);
 
         std::optional<u64> base_title_id;
         std::error_code ec;
@@ -625,8 +652,13 @@ public:
         std::ranges::sort(versions);
         const u8 update_flags = base_title_id ? 0 : FlagStandaloneUpdate;
         for (const auto& [version, path] : versions) {
+            const auto index = static_cast<u32>(plan.packages.size());
             AddPackage(KindUpdate, path, static_cast<u32>(version), {}, update_flags,
                        base_title_id.value_or(0));
+            if (consolidated_program &&
+                selected->parent_path().parent_path().parent_path() == path) {
+                preferred_metadata_package = index;
+            }
         }
 
         if (!dlc.empty()) {
@@ -723,8 +755,12 @@ private:
         package_dirs.push_back(dir);
 
         const auto exefs = FindDirectory(dir, "exefs");
+        const auto program1 = FindDirectory(dir, "program1");
+        const auto edition_exefs = FindDirectory(program1, "exefs");
+        const auto metadata_exefs = edition_exefs.empty() ? exefs : edition_exefs;
+        const auto metadata_dir = edition_exefs.empty() ? dir : program1;
         const auto romfs = FindDirectory(dir, "romfs");
-        fs::path npdm_path = exefs.empty() ? fs::path{} : exefs / "main.npdm";
+        fs::path npdm_path = metadata_exefs.empty() ? fs::path{} : metadata_exefs / "main.npdm";
         if (!IsFile(npdm_path)) {
             npdm_path = dir / "main.npdm";
         }
@@ -737,7 +773,7 @@ private:
         }
 
         if (kind != KindAddon) {
-            if (auto loader = OpenLoader(vfs, dir)) {
+            if (auto loader = OpenLoader(vfs, metadata_dir)) {
                 std::string display_version;
                 if (loader->ReadDisplayVersion(display_version) == Loader::ResultStatus::Success &&
                     !display_version.empty()) {
@@ -782,8 +818,14 @@ private:
         const auto app = static_cast<u32>(std::distance(
             plan.packages.begin(), std::ranges::find(plan.packages, KindBase, &PlanPackage::kind)));
         const u32 target = app < plan.packages.size() ? app : 0;
-        std::ranges::stable_sort(loaders, [target](const auto& a, const auto& b) {
-            return (a.first == target) > (b.first == target);
+        std::ranges::stable_sort(loaders, [this, target](const auto& a, const auto& b) {
+            const auto priority = [this, target](u32 index) {
+                if (preferred_metadata_package && index == *preferred_metadata_package) {
+                    return 2;
+                }
+                return index == target ? 1 : 0;
+            };
+            return priority(a.first) > priority(b.first);
         });
 
         auto& tlvs = package_tlvs[target];
@@ -909,6 +951,7 @@ private:
     std::vector<fs::path> package_dirs;
     std::vector<std::pair<u32, std::unique_ptr<Loader::AppLoader_DeconstructedRomDirectory>>>
         loaders;
+    std::optional<u32> preferred_metadata_package;
 };
 
 Json PlanToJson(const Plan& plan) {
@@ -1602,6 +1645,7 @@ Metadata ProbeMetadata(const fs::path& dump_root) {
     RealVfsFilesystem vfs;
     const auto base = FindDirectory(dump_root, "base");
     const auto updates = FindDirectory(dump_root, "updates");
+    const auto selected = Loader::ResolveLooseProgramPath(dump_root);
 
     // Newest update first, then the base (or a bare dump's root).
     std::vector<std::pair<u64, fs::path>> update_dirs;
@@ -1661,11 +1705,15 @@ Metadata ProbeMetadata(const fs::path& dump_root) {
             }
         }
     };
-    if (const auto selected = Loader::ResolveLooseProgramPath(dump_root);
-        selected && IsProgramVariant(*selected)) {
+    if (selected && IsProgramVariant(*selected)) {
         probe(selected->parent_path().parent_path(),
               "program " + ToUtf8(selected->parent_path().parent_path().filename()), true);
         return result;
+    }
+    if (selected && IsConsolidatedProgram(*selected)) {
+        const auto program = selected->parent_path().parent_path();
+        const auto version = ParseDecimal(ToUtf8(program.parent_path().filename()));
+        probe(program, version ? "update " + std::to_string(*version) : "update", true);
     }
     for (const auto& [version, dir] : update_dirs) {
         probe(dir, "update " + std::to_string(version), false);
