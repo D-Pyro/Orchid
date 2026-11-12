@@ -84,7 +84,13 @@ void SyncpointManager::IncrementGuest(u32 syncpoint_id) {
     if (!IsValidSyncpoint(syncpoint_id)) {
         return;
     }
-    Increment(syncpoints_guest[syncpoint_id], wait_guest_cv, guest_action_storage[syncpoint_id]);
+    Increment(syncpoints_guest[syncpoint_id], wait_guest_cv, guest_action_storage[syncpoint_id],
+              syncpoint_id);
+}
+
+void SyncpointManager::SetGuestMirror(GuestMirror mirror) {
+    std::scoped_lock lk(guard);
+    guest_mirror = std::move(mirror);
 }
 
 void SyncpointManager::IncrementHost(u32 syncpoint_id) {
@@ -103,7 +109,8 @@ void SyncpointManager::WaitHost(u32 syncpoint_id, u32 expected_value) {
 }
 
 void SyncpointManager::Increment(std::atomic<u32>& syncpoint, std::condition_variable& wait_cv,
-                                 std::list<RegisteredAction>& action_storage) {
+                                 std::list<RegisteredAction>& action_storage,
+                                 std::optional<u32> mirrored_id) {
     auto new_value{syncpoint.fetch_add(1, std::memory_order_acq_rel) + 1};
 
     // The due actions run after the guard is released: the composite action can block on the
@@ -113,6 +120,11 @@ void SyncpointManager::Increment(std::atomic<u32>& syncpoint, std::condition_var
     std::list<RegisteredAction> due;
     {
         std::scoped_lock lk(guard);
+        if (mirrored_id && guest_mirror) {
+            // The current value, not new_value: a concurrent increment may have mirrored a
+            // higher one.
+            guest_mirror(*mirrored_id, syncpoint.load(std::memory_order_acquire));
+        }
         auto it = action_storage.begin();
         while (it != action_storage.end() && it->expected_value <= new_value) {
             due.splice(due.end(), action_storage, it++);
