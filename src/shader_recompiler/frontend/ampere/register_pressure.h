@@ -93,6 +93,8 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         operand(24);
         break;
     case 0xa24:
+    case 0xc24: // IMAD with a uniform B (0xc24) or uniform C (0xe24, B in bits 64-71)
+    case 0xe24:
     case 0xa23:
     case 0x623:
     case 0x423:
