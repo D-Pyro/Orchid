@@ -240,12 +240,71 @@ FileSys::VirtualDir FindEditionProgramZeroRomFS(const FileSys::VirtualDir& exefs
     return FileSys::LayeredVfsDirectory::MakeLayeredDirectory(std::move(tiers));
 }
 
+FileSys::VirtualDir FindSubdirectory(const FileSys::VirtualDir& parent, std::string_view name) {
+    if (parent == nullptr) {
+        return nullptr;
+    }
+    if (const auto direct = parent->GetSubdirectory(std::string{name})) {
+        return direct;
+    }
+    for (const auto& subdirectory : parent->GetSubdirectories()) {
+        if (EqualsIgnoreCase(subdirectory->GetName(), name)) {
+            return subdirectory;
+        }
+    }
+    return nullptr;
+}
+
 FileSys::VirtualFile PackageMainFile(const FileSys::VirtualDir& package) {
-    const auto exefs = package != nullptr ? package->GetSubdirectory("exefs") : nullptr;
+    const auto exefs = FindSubdirectory(package, "exefs");
     if (exefs == nullptr || exefs->GetFile("main.npdm") == nullptr) {
         return nullptr;
     }
     return exefs->GetFile("main");
+}
+
+FileSys::VirtualFile ProgramIndexMain(const FileSys::VirtualDir& programs, std::string_view index) {
+    return PackageMainFile(FindSubdirectory(programs, index));
+}
+
+// program1 can be consolidated directly in a version folder, nested in program/, or represented
+// as numbered program/1. Resolve the same shapes regardless of whether `package` is the version
+// folder or the program wrapper.
+FileSys::VirtualFile EditionMainInPackage(const FileSys::VirtualDir& package) {
+    if (const auto direct = PackageMainFile(FindSubdirectory(package, "program1"))) {
+        return direct;
+    }
+    const auto programs = EqualsIgnoreCase(package != nullptr ? package->GetName() : "", "program")
+                              ? package
+                              : FindSubdirectory(package, "program");
+    if (const auto wrapped = PackageMainFile(FindSubdirectory(programs, "program1"))) {
+        return wrapped;
+    }
+    return ProgramIndexMain(programs, "1");
+}
+
+FileSys::VirtualFile Switch1MainInPackage(const FileSys::VirtualDir& package) {
+    const auto programs = EqualsIgnoreCase(package != nullptr ? package->GetName() : "", "program")
+                              ? package
+                              : FindSubdirectory(package, "program");
+    if (const auto wrapped = ProgramIndexMain(programs, "0")) {
+        return wrapped;
+    }
+    return PackageMainFile(package);
+}
+
+bool IsWithinDirectory(FileSys::VirtualDir dir, const FileSys::VirtualDir& parent) {
+    if (parent == nullptr) {
+        return false;
+    }
+    const auto parent_path = parent->GetFullPath();
+    while (dir != nullptr) {
+        if (dir->GetFullPath() == parent_path) {
+            return true;
+        }
+        dir = dir->GetParentDirectory();
+    }
+    return false;
 }
 
 } // namespace
@@ -260,36 +319,84 @@ FileSys::VirtualFile FindLooseProgramMain(const FileSys::VirtualFile& main,
     if (package == nullptr) {
         return nullptr;
     }
-    if (program_index == 0 && EqualsIgnoreCase(package->GetName(), "program1")) {
+    const auto package_parent = package->GetParentDirectory();
+    const bool numbered_program = package_parent != nullptr &&
+                                  EqualsIgnoreCase(package_parent->GetName(), "program");
+    const bool current_edition = EqualsIgnoreCase(package->GetName(), "program1") ||
+                                 (numbered_program && EqualsIgnoreCase(package->GetName(), "1"));
+
+    if (program_index == 0) {
+        if (!current_edition) {
+            // A program already selected as index 0 stays selected on an explicit same-index
+            // restart. If it is the base program, however, find the edition update's matching
+            // Switch 1 executable or mark that its RomFS must remain base-only.
+            const auto base = FindLooseBaseDirectory(exefs);
+            if (!IsWithinDirectory(exefs, base)) {
+                return main;
+            }
+            const auto storage = FindSidecarDirs(exefs).back();
+            for (const auto name : {std::string_view{"upgrade"}, std::string_view{"updates"}}) {
+                const auto updates = FindSubdirectory(storage, name);
+                for (const auto& [version, version_dir] : OrderedUpdateVersionDirs(updates)) {
+                    if (EditionMainInPackage(version_dir) == nullptr) {
+                        continue;
+                    }
+                    if (const auto switch1 = Switch1MainInPackage(version_dir)) {
+                        return switch1;
+                    }
+                    if (base_romfs_only != nullptr) {
+                        *base_romfs_only = true;
+                    }
+                    return main;
+                }
+            }
+            return main;
+        }
+
         // The Switch 1 program of the same version: a program/0 sibling, the version folder's
         // own exefs/, or the base program when the dump keeps no updated one.
-        auto version = package->GetParentDirectory();
-        if (version != nullptr && EqualsIgnoreCase(version->GetName(), "program")) {
-            if (auto zero = PackageMainFile(version->GetSubdirectory("0"))) {
+        auto version = numbered_program ? package_parent->GetParentDirectory()
+                                        : package->GetParentDirectory();
+        if (numbered_program) {
+            if (const auto zero = ProgramIndexMain(package_parent, "0")) {
                 return zero;
             }
-            version = version->GetParentDirectory();
+        } else if (const auto programs = FindSubdirectory(version, "program")) {
+            if (const auto zero = ProgramIndexMain(programs, "0")) {
+                return zero;
+            }
         }
-        if (auto legacy = PackageMainFile(version)) {
+        if (const auto legacy = PackageMainFile(version)) {
             return legacy;
         }
-        const auto base = PackageMainFile(FindLooseBaseDirectory(exefs));
+        const auto base = Switch1MainInPackage(FindLooseBaseDirectory(exefs));
         if (base != nullptr && base_romfs_only != nullptr) {
             *base_romfs_only = true;
         }
         return base;
     }
-    if (program_index == 1 && !EqualsIgnoreCase(package->GetName(), "program1")) {
-        // Back to the edition: the program1 package of this version folder, or of the newest
-        // update for a base program.
-        if (auto edition = PackageMainFile(package->GetSubdirectory("program1"))) {
+
+    if (program_index == 1) {
+        if (current_edition) {
+            return main;
+        }
+        if (const auto edition = EditionMainInPackage(package)) {
             return edition;
         }
-        const auto storage = FindSidecarDirs(exefs).back();
-        const auto updates = storage != nullptr ? storage->GetSubdirectory("updates") : nullptr;
-        for (const auto& [version, version_dir] : OrderedUpdateVersionDirs(updates)) {
-            if (auto edition = PackageMainFile(version_dir->GetSubdirectory("program1"))) {
+        if (numbered_program) {
+            if (const auto edition = EditionMainInPackage(package_parent)) {
                 return edition;
+            }
+        }
+        const auto storage = FindSidecarDirs(exefs).back();
+        // Match ResolveLooseProgramPath: upgrade/ is checked before updates/, and each storage
+        // tier is searched newest-first. EditionMainInPackage handles direct and wrapped forms.
+        for (const auto name : {std::string_view{"upgrade"}, std::string_view{"updates"}}) {
+            const auto updates = FindSubdirectory(storage, name);
+            for (const auto& [version, version_dir] : OrderedUpdateVersionDirs(updates)) {
+                if (const auto edition = EditionMainInPackage(version_dir)) {
+                    return edition;
+                }
             }
         }
     }

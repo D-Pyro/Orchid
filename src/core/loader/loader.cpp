@@ -428,6 +428,10 @@ static std::unique_ptr<AppLoader> GetFileLoader(Core::System& system, FileSys::V
                 LOG_INFO(Loader, "Program index {} boots {}", *switched_index,
                          other->GetFullPath());
                 file = std::move(other);
+            } else {
+                LOG_ERROR(Loader, "Loose directory has no program index {}",
+                          *switched_index);
+                return nullptr;
             }
         }
         return std::make_unique<AppLoader_DeconstructedRomDirectory>(std::move(file), false,

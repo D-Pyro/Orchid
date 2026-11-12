@@ -567,8 +567,8 @@ TEST_CASE("ExecuteProgram restarts switch between the edition and its Switch 1 p
     CHECK(main_of(version / "program1/exefs/main", 0) == "update");
     CHECK(main_of(version / "exefs/main", 1) == "edition");
     CHECK(main_of(game / "base/exefs/main", 1) == "edition");
-    CHECK(main_of(version / "program1/exefs/main", 1).empty());
-    CHECK(main_of(version / "exefs/main", 0).empty());
+    CHECK(main_of(version / "program1/exefs/main", 1) == "edition");
+    CHECK(main_of(version / "exefs/main", 0) == "update");
     CHECK(main_of(version / "program1/exefs/main", 2).empty());
     CHECK(main_of(version / "program1/exefs/main", *switch_params.switched_program_index) ==
           "update");
@@ -597,6 +597,26 @@ TEST_CASE("ExecuteProgram restarts switch between the edition and its Switch 1 p
         CHECK(tree->GetFile("base.bin"));
         CHECK_FALSE(tree->GetFile("update.bin"));
     }
+    SECTION("returning to the base path after an edition switch keeps base-only data") {
+        fs::remove_all(version / "exefs");
+        const auto edition = Loader::FindLooseProgramMain(open(game / "base/exefs/main"), 1);
+        REQUIRE(edition);
+        const auto edition_bytes = edition->ReadAllBytes();
+        CHECK(std::string{edition_bytes.begin(), edition_bytes.end()} == "edition");
+
+        bool base_romfs_only = false;
+        const auto base = Loader::FindLooseProgramMain(open(game / "base/exefs/main"), 0,
+                                                       &base_romfs_only);
+        REQUIRE(base);
+        CHECK(base_romfs_only);
+        Loader::AppLoader_DeconstructedRomDirectory loader{base, false, base_romfs_only};
+        FileSys::VirtualFile romfs;
+        REQUIRE(loader.ReadRomFS(romfs) == Loader::ResultStatus::Success);
+        const auto tree = FileSys::ExtractRomFS(romfs);
+        REQUIRE(tree);
+        CHECK(tree->GetFile("base.bin"));
+        CHECK_FALSE(tree->GetFile("update.bin"));
+    }
     SECTION("a wrapped program1 prefers its program/0 sibling") {
         const auto programs = game / "upgrade/65536/program";
         LooseTestDirectory::ExeFS(programs / "program1/exefs", "wrapped edition");
@@ -610,5 +630,28 @@ TEST_CASE("ExecuteProgram restarts switch between the edition and its Switch 1 p
         fs::remove_all(version / "exefs");
         fs::remove_all(game / "base");
         CHECK(main_of(version / "program1/exefs/main", 0).empty());
+        Core::System system;
+        const auto loader = Loader::GetLoader(
+            system, open(version / "program1/exefs/main"), 0, 0, std::size_t{0});
+        CHECK(loader == nullptr);
+    }
+    SECTION("program index one searches wrapped program1 and upgrade aliases") {
+        fs::remove_all(game / "updates");
+        fs::remove_all(game / "upgrade");
+        for (const auto layout : {"updates/65536/program/program1",
+                                  "upgrade/65536/program1",
+                                  "upgrade/65536/program/program1"}) {
+            DYNAMIC_SECTION(layout) {
+                fs::remove_all(game / "updates");
+                fs::remove_all(game / "upgrade");
+                const auto edition_dir = game / layout;
+                LooseTestDirectory::ExeFS(edition_dir / "exefs", "wrapped edition");
+                const auto edition =
+                    Loader::FindLooseProgramMain(open(game / "base/exefs/main"), 1);
+                REQUIRE(edition);
+                const auto bytes = edition->ReadAllBytes();
+                CHECK(std::string{bytes.begin(), bytes.end()} == "wrapped edition");
+            }
+        }
     }
 }
