@@ -137,8 +137,9 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code, bool geo
         // instruction, see register_pressure.h) or rejected.
         bool requires_shadow = false;
         for (u32 bit : {16U, 24U, 32U, 64U}) {
-            // Uniform-base STL, RED and SURED also take data from bits 32-39, as RegisterPressure records.
-            if (bit == 32 && insn.Bits(9, 3) != 1 && opcode != 0xb60 && opcode != 0xb66 && opcode != 0xf60 && opcode != 0xf6c && opcode != 0x988 && opcode != 0x987 && opcode != 0xf66 && opcode != 0x98e && opcode != 0x59f) continue;
+            // Bits 32-39 are a register outside the register forms too: TEX/TLD/TXD sources, the data
+            // of the stores, RED, SURED and ATOMG (0x9a8), as RegisterPressure records.
+            if (bit == 32 && insn.Bits(9, 3) != 1 && opcode != 0xb60 && opcode != 0xb66 && opcode != 0xb6c && opcode != 0x9a8 && opcode != 0xf60 && opcode != 0xf6c && opcode != 0x988 && opcode != 0x987 && opcode != 0xf66 && opcode != 0x98e && opcode != 0x59f) continue;
             const u32 reg = insn.Bits(bit, 8);
             if (reg >= (uses_uniform_bank ? 216U : 246U) && reg < 255) requires_shadow = true;
             else if (reg < 255) highest_source = std::max(highest_source, reg);

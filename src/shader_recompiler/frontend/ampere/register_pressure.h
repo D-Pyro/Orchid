@@ -147,6 +147,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         operand(24);
         break;
     case 0x308:
+    case 0x9a8: // ATOMG: the address is a uniform register (bits 64-69), data at bit 32
     case 0x304: // F2F.F16.F32: the source is bits 32-39, bits 24-31 must be zero
     case 0x202:
     case 0x245:
@@ -283,6 +284,16 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         operand(16, input.Bits(73, 3) == 5 ? 2 : 1);
         operand(24);
         break;
+    case 0xb6c: // TXD bound or (0xf6c) with a uniform handle: Rd, Rd+1 and the second pair take
+    case 0xf6c: { // the channels, (x, y[, layer]) in Ra, the four gradients in Rb.
+        const u32 channels = static_cast<u32>(std::popcount(input.Bits(72, 4)));
+        operand(16, std::min(channels, 2U));
+        operand(24, input.Bits(61, 3) == 5 ? 3 : 2);
+        operand(32, 4);
+        if (channels > 2)
+            operand(64, channels - 2);
+        break;
+    }
     case 0x381:
     case 0x386:
     case 0x981:

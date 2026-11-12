@@ -173,3 +173,32 @@ TEST_CASE("Ampere register shadowing covers LOP3 with a cbuf or uniform B",
     CheckShadowed({{0xe2d97a12, 0x00c00400, 0x078ec0e4, 0}}, {{16, 1}, {24, 1}, {64, 1}});
     CheckShadowed({{0xe2d97c12, 0x04, 0x0f8ec0e4, 0}}, {{16, 1}, {24, 1}, {64, 1}});
 }
+
+TEST_CASE("Ampere register shadowing covers ATOMG data and every TXD register",
+          "[video_core][ampere][pressure]") {
+    // ATOMG.E.ADD R225, [UR4], R240; and with only the data high, which bits 32-39 must catch.
+    CheckShadowed({{0xffe179a8, 0xf0, 0x081ee144, 0}}, {{16, 1}, {32, 1}});
+    CheckShadowed({{0xff0479a8, 0xf0, 0x081ee144, 0}}, {{16, 1}, {32, 1}});
+    // TXD.2D R224/R225 and R218/R219, (x, y) in R232, gradients R240-R243.
+    constexpr Instruction gradient{{0xe8e07b6c, 0x200000f0, 0x001e0fda, 0}};
+    CheckShadowed(gradient, {{16, 2}, {24, 2}, {32, 4}, {64, 2}});
+    // Only the gradients high: bits 32-39 must be checked for TXD too.
+    CheckShadowed({{0x08047b6c, 0x200000f0, 0x001e03ff, 0}}, {{16, 2}, {24, 2}, {32, 4}});
+    // TXD.ARRAY_2D: (x, y, layer) in R232-R234.
+    CheckShadowed({{0xe8e07b6c, 0xa00000f0, 0x001e03ff, 0}}, {{16, 2}, {24, 3}, {32, 4}});
+    // The same with the handle in UR4 (0xf6c).
+    CheckShadowed({HandleShift, {{0xe8e07f6c, 0xa00004f0, 0x081e0fe2, 0}}, Exit}, 1,
+                  {{16, 2}, {24, 3}, {32, 4}, {64, 2}});
+
+    constexpr Instruction low{{0x08047b6c, 0x20000010, 0x001e0f0a, 0}};
+    for (const u32 opcode : {0xb6cU, 0xf6cU}) {
+        const auto base = With(low, 0, opcode, 12);
+        CheckSpan(base, 16, 2);
+        CheckSpan(base, 24, 2);
+        CheckSpan(With(base, 61, 5, 3), 24, 3);
+        CheckSpan(base, 32, 4);
+        CheckSpan(base, 64, 2);
+        CheckSpan(With(base, 72, 7, 4), 64, 1);
+        CheckSpan(With(With(base, 72, 1, 4), 64, 255), 16, 1);
+    }
+}
