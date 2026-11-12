@@ -33,6 +33,7 @@ add_executable(tests
     audio_core/adpcm_decode.cpp
     core/address_arbiter_read.cpp
     core/address_space.cpp
+    core/builtin_font_glyphs.cpp
     core/core_timing.cpp
     core/filesystem_buffer_bounds.cpp
     core/page_heap.cpp
