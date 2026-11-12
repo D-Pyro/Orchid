@@ -319,6 +319,11 @@ void Maxwell3D::DrawManager::ProcessDraw(Maxwell3D& maxwell3d, bool draw_indexed
         draw_indexed ? draw_state.index_buffer.count : draw_state.vertex_buffer.count;
     LOG_TRACE(HW_GPU, "called, topology={}, count={}", draw_state.topology, draw_indexed ? draw_state.index_buffer.count : draw_state.vertex_buffer.count);
     UpdateTopology(maxwell3d);
+    // A draw with no vertices or no instances draws nothing: skip the pipeline, descriptor and
+    // buffer setup (Donkey Kong Bananza's terrain issues thousands per frame for culled pieces).
+    if (draw_state.draw_element_count == 0 || instance_count == 0) {
+        return;
+    }
     if (maxwell3d.ShouldExecute()) {
         maxwell3d.rasterizer->Draw(draw_indexed, instance_count);
     }
