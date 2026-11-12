@@ -853,7 +853,9 @@ void Device::LoadStaticPipelineCache() {
         create(0, nullptr);
         return;
     }
-    const auto filename = StaticPipelineCacheFilename();
+    // Device can outlive the path manager during process teardown.
+    static_pipeline_cache_filename = StaticPipelineCacheFilename();
+    const auto& filename = static_pipeline_cache_filename;
     if (filename.empty()) {
         create(0, nullptr);
         return;
@@ -893,7 +895,7 @@ void Device::SaveStaticPipelineCache() const {
     if (!owns_static_pipeline_cache || !static_pipeline_cache) {
         return;
     }
-    const auto filename = StaticPipelineCacheFilename();
+    const auto& filename = static_pipeline_cache_filename;
     if (filename.empty()) {
         return;
     }
