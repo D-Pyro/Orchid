@@ -1467,6 +1467,11 @@ void BufferCache<P>::ResolveMultiRangeStorage(Binding& binding, bool is_written,
         if (is_written && !runtime.PrefersSparseSources()) {
             return;
         }
+        // A range inside one 4 KiB page has one segment at most. Bananza binds a new written
+        // address in most draws; each such miss walked the page table and added a cache entry.
+        if ((binding.gpu_addr >> 12) == ((binding.gpu_addr + binding.size - 1) >> 12)) {
+            return;
+        }
         const VirtualSegments* found =
             virtual_ranges.Query(*gpu_memory, binding.gpu_addr, binding.size);
         if (!found || found->size() < 2) {
