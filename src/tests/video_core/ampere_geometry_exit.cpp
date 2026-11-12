@@ -165,6 +165,70 @@ TEST_CASE("Ampere geometry exit setup results must be dead before the body reads
     RequireRejected(code, reads, 0x90);
 }
 
+TEST_CASE("Kirby geometry exit tracks the captured immediate funnel shift",
+          "[video_core][ampere][kirby][shf_exit]") {
+    // da84d8f18a474354, geometry stage, offset 0x250: SHF.R.U32.HI R4, RZ, 16, R66.
+    constexpr Instruction captured{{0xff047819, 0x00000010, 0x00011642, 0x001fc800}};
+    constexpr std::string_view reads = "native body reads exit setup state";
+    auto code = Program;
+    code[6] = captured;
+    RequireAccepted(code);
+    const auto lowered = Shader::Ampere::LowerToMaxwell(code, true);
+    INFO(lowered.error << " at " << lowered.error_offset);
+    REQUIRE(lowered);
+    const u64 shift = lowered.instructions[lowered.source_instruction_offsets[6]];
+    CHECK((shift & 0xfff8000000000000ULL) == 0x3828000000000000ULL);
+    CHECK((shift & 0xff) == 4);
+    CHECK(((shift >> 8) & 0xff) == 66);
+    CHECK(((shift >> 20) & 0x7ffff) == 16);
+
+    for (const u32 source : {1U, 3U}) {
+        code = Program;
+        code[6] = captured;
+        code[6].words[0] = (code[6].words[0] & 0x00ffffffU) | (source << 24);
+        RequireRejected(code, reads, 0x60);
+        code[6] = captured;
+        code[6].words[2] = (code[6].words[2] & ~0xffU) | source;
+        RequireRejected(code, reads, 0x60);
+    }
+    for (const u32 guard : {0U, 8U}) {
+        code = Program;
+        code[6] = captured;
+        code[6].words[0] = (code[6].words[0] & ~0xf000U) | (guard << 12);
+        RequireRejected(code, reads, 0x60);
+    }
+    // R9 and R11 are not setup state (their low three bits name R1 and R3, which are).
+    code = Program;
+    code[6] = captured;
+    code[6].words[0] = (code[6].words[0] & 0x00ffffffU) | (9U << 24);
+    RequireAccepted(code);
+    code[6] = captured;
+    code[6].words[2] = (code[6].words[2] & ~0xffU) | 11U;
+    RequireAccepted(code);
+
+    // An unconditional SHF kills R3; a predicated write leaves its old setup value live.
+    for (const u32 guard : {1U, 7U, 9U}) {
+        code = Program;
+        code[9] = captured;
+        code[9].words[0] = 0xff030819U | (guard << 12);
+        code[10] = Instruction{{0x03087923, 0, 0, 0}}; // MOV R8, R3.
+        if (guard == 7) {
+            RequireAccepted(code);
+        } else {
+            RequireRejected(code, reads, 0xa0);
+        }
+    }
+
+    // Modeling its register effects does not enable an unsupported funnel-shift mode.
+    code = Program;
+    code[6] = captured;
+    code[6].words[2] |= 0x800;
+    const auto unsupported = Shader::Ampere::LowerToMaxwell(code, true);
+    REQUIRE_FALSE(unsupported);
+    CHECK(unsupported.error == "native funnel-shift mode");
+    CHECK(unsupported.error_offset == 0x60);
+}
+
 TEST_CASE("Ampere geometry exit body cannot touch the handler state", "[video_core][ampere]") {
     for (const u32 word0 : {0x00007357U, 0x00007957U, 0x00007355U, 0x0000734eU}) {
         auto code = Program;
