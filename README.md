@@ -190,6 +190,49 @@ source and author in its message.
 - [Djihads80/Eglantine](https://github.com/Djihads80/Eglantine) and its contributors: merged
   regularly. Idle staging buffers freed (Takoroka), the RangeSet empty-query guard (néo Luigi),
   test fixes (kraibse).
+- Fork scan of 2026-11-11, 68 fixes for correctness, stability and AMD hosts (audio ADPCM decode,
+  guest memory and address space bookkeeping, shutdown hangs, syncpoint waits behind Yoshi's movie
+  player abort, Vulkan barriers and samplers, shader NaN and atomics handling, texture cache
+  ordering, buffer cache lookups in Donkey Kong Bananza); each commit names its source:
+  [zortos293/Eglantine](https://github.com/zortos293/Eglantine) (Zortos, zorudikku, cerroverb,
+  jpkto, Jay, monsterlag, vouion, Luke Evanson, 15 fixes);
+  [cerroverb/Lichii](https://github.com/cerroverb/Lichii) (cerroverb);
+  [Djihads80/Eglantine](https://github.com/Djihads80/Eglantine) (kraibse, Felipe Lima, Kaj, 3
+  fixes); [tlombardo1-sudo/Lichii](https://github.com/tlombardo1-sudo/Lichii) (Claude, 2 fixes);
+  [K-code-AI/Greenhat-Lichii](https://github.com/K-code-AI/Greenhat-Lichii) (Dr. Sergio);
+  [JoaoVSF99/Lichii](https://github.com/JoaoVSF99/Lichii) (JoaoVSF99);
+  [JuliusBairaktaris/Lichii](https://github.com/JuliusBairaktaris/Lichii) (Julius Bairaktaris);
+  [mariohbd/Lichii](https://github.com/mariohbd/Lichii) (janvitos, Mario, 2 fixes);
+  [rdenno/Eglantine](https://github.com/rdenno/Eglantine) (AManWithAPlan, kraibse, Rhys Denno,
+  rdenno, 4 fixes); [VilmaH/Lichii](https://github.com/VilmaH/Lichii) (viltsu);
+  [dylanflandpro/Lichii](https://github.com/dylanflandpro/Lichii) (dylanflandpro);
+  [sebjager/Eglantine](https://github.com/sebjager/Eglantine) (snowstormxd, Sssnowyyy, 2 fixes);
+  [anthonyloukinas/Lichii](https://github.com/anthonyloukinas/Lichii) (Anthony Loukinas);
+  [marcochiusso-lgtm/Lichii](https://github.com/marcochiusso-lgtm/Lichii) (marcusbooker77,
+  RomainROCH, 2 fixes);
+  [elkarbeenus/Lichii_improvments_ram](https://github.com/elkarbeenus/Lichii_improvments_ram)
+  (zortos293, Claude, 2 fixes); [arnaudcouturier/Lichii](https://github.com/arnaudcouturier/Lichii)
+  (Arnaud Couturier); [ThatGuyMcd/Lichii-TGM](https://github.com/ThatGuyMcd/Lichii-TGM) (Krim,
+  Julius Bairaktaris, 2 fixes); [javocsoft/Lichii](https://github.com/javocsoft/Lichii) (JavocSoft);
+  [Marssvoodoo/Lichii](https://github.com/Marssvoodoo/Lichii) (marcusbooker77);
+  [phalcoon/Lichii](https://github.com/phalcoon/Lichii) (zortos293);
+  [AmateurWizrd/lichii-graft](https://github.com/AmateurWizrd/lichii-graft) (AmateurWizrd, Julius
+  Bairaktaris, 3 fixes); [vouion/Lichii](https://github.com/vouion/Lichii) (Gavin Schiller);
+  [dylandeheer/Stitch](https://github.com/dylandeheer/Stitch) (Dylan de Heer);
+  [bunbeans2-arch/Lichii](https://github.com/bunbeans2-arch/Lichii) (sharkiix);
+  [adamuremek/Lichii](https://github.com/adamuremek/Lichii) (Copilot App);
+  [WareSven/Lichii](https://github.com/WareSven/Lichii) (Codex);
+  [blackxzin/Lichii](https://github.com/blackxzin/Lichii) (blackxzin);
+  [Mvii7/Dozerr](https://github.com/Mvii7/Dozerr) (Claude, 2 fixes);
+  [vv4k4l/Eglantine](https://github.com/vv4k4l/Eglantine) (justr4mzi, notsapinho, thatirishguyyy, 3
+  fixes); [Melon1155/Lichii](https://github.com/Melon1155/Lichii) (jpkto);
+  [drizzt/Lichii](https://github.com/drizzt/Lichii) (Matt Artist);
+  [mja00/Lichii](https://github.com/mja00/Lichii) (Matt Artist);
+  [auz466/Lichiistein](https://github.com/auz466/Lichiistein) (CloudP4bbs, Frizti, 2 fixes);
+  [GoatTech-42/Lichii](https://github.com/GoatTech-42/Lichii) (Luke Evanson);
+  [sexyboomer888-gif/Lichii](https://github.com/sexyboomer888-gif/Lichii) (sexyboomer888-gif);
+  [Uaeriop/Lichii](https://github.com/Uaeriop/Lichii) (bboerge);
+  [sheepbun/lichii-bunx2](https://github.com/sheepbun/lichii-bunx2) (sheepbun).
 - [ZnOw01/Primrose](https://github.com/ZnOw01/Primrose) (ZnOw01): shader cache invalidation
   lifetime fix, adapted to renderer-thread retirement.
 - [exploitizm/Eglantine](https://github.com/exploitizm/Eglantine) (exploitizm): signed IADD32
