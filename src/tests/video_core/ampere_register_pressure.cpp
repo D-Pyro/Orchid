@@ -142,3 +142,16 @@ TEST_CASE("Ampere register shadowing covers FMNMX and FADD without a register B,
     // IDP.4A R225, R226, R232, R236.
     CheckShadowed({{0xe2e17226, 0xe8, 0x000000ec, 0}}, {{16, 1}, {24, 1}, {32, 1}, {64, 1}});
 }
+
+TEST_CASE("Ampere register shadowing covers P2R, uniform I2FP and indexed LDC",
+          "[video_core][ampere][pressure]") {
+    // P2R R221, PR, R224, 0x1.
+    CheckShadowed({{0xe0dd7803, 1, 0, 0}}, {{16, 1}, {24, 1}});
+    // I2FP.F32.U32 R225, UR11.
+    CheckShadowed({{0x00e17c45, 0x0b, 0x08201400, 0}}, {{16, 1}});
+    // LDC.64 R226, c[0x7][R232 + 0x10]: the destination is a pair; LDC.32 writes one register.
+    constexpr Instruction load{{0xe8e27b82, 0x01c00400, 0x00000a00, 0}};
+    CheckShadowed(load, {{16, 2}, {24, 1}});
+    CheckSpan(With(load, 24, 8), 16, 2);
+    CheckSpan(With(With(load, 24, 8), 73, 4, 3), 16, 1);
+}
