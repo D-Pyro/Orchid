@@ -319,6 +319,32 @@ TEST_CASE("Ampere register shadowing covers TEX with a uniform handle",
     CheckSpan(With(volume, 87, 2, 3), 32, 2);
 }
 
+TEST_CASE("Ampere IMAD negates a constant buffer addend", "[video_core][ampere]") {
+    // IMAD R1, R2, R3, -c[0x3][0x10].
+    constexpr Instruction multiply{{0x02017624, 0x80c00400, 0x078e0003, 0}};
+    const auto lowered = LowerToMaxwell(std::array{multiply, Exit});
+    INFO(lowered.error);
+    REQUIRE(static_cast<bool>(lowered));
+    const auto& words = lowered.instructions;
+    // The addend is loaded into R252, negated there (R252 = RZ - R252) and added by the first XMAD.
+    REQUIRE(words.size() >= 3);
+    CHECK(words[0] == (0x4c98000000070000ULL | 252 | (u64{15} << 39) | (u64{4} << 20) |
+                       (u64{3} << 34)));
+    CHECK(words[1] == (0x5c10000000070000ULL | 252 | (u64{255} << 8) | (u64{252} << 20) |
+                       (u64{1} << 48)));
+    CHECK(words[2] == (0x5b00000000070000ULL | 250 | (u64{2} << 8) | (u64{3} << 20) |
+                       (u64{252} << 39)));
+    // Without the negation the addend is used as loaded.
+    const auto positive = LowerToMaxwell(std::array{With(multiply, 63, 0, 1), Exit});
+    REQUIRE(static_cast<bool>(positive));
+    CHECK(positive.instructions.size() == words.size() - 1);
+    CHECK(positive.instructions[1] == words[2]);
+    // The absolute value (bit 62) stays rejected.
+    const auto absolute = LowerToMaxwell(std::array{With(multiply, 62, 1, 1), Exit});
+    REQUIRE_FALSE(static_cast<bool>(absolute));
+    CHECK(absolute.error == "native multiply wide addend mode");
+}
+
 TEST_CASE("Ampere HSETP2 with a constant buffer compares through a scratch register",
           "[video_core][ampere]") {
     // HSETP2.GT.AND P1, PT, RZ.H0_H0, c[0x7][0xfc].H1_H1, !P1 (Hyrule Warriors).
