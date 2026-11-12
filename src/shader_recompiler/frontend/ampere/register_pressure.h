@@ -69,11 +69,17 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         break;
     case 0x807:
     case 0x808:
+    case 0x809: // FMNMX: B is an immediate, cbuf or uniform register, never a GPR
+    case 0xa09:
+    case 0xc09:
     case 0x923:
     case 0x820:
     case 0xa20:
     case 0xc20:
     case 0x421:
+    case 0x821: // FADD: B is an immediate, cbuf or (0xe21) uniform register
+    case 0xa21:
+    case 0xe21:
         operand(16);
         operand(24);
         break;
@@ -140,6 +146,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
         operand(24);
         break;
     case 0x308:
+    case 0x304: // F2F.F16.F32: the source is bits 32-39, bits 24-31 must be zero
     case 0x202:
     case 0x245:
     case 0x305:
@@ -199,6 +206,7 @@ inline RegisterPressure PrepareRegisterPressure(const Instruction& input, u32 re
     case 0x210:
     case 0x211:
     case 0x212:
+    case 0x226: // IDP.4A: a, b and the accumulator
         operand(16);
         operand(24);
         operand(32);

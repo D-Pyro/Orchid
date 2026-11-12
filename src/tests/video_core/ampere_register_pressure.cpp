@@ -123,3 +123,22 @@ TEST_CASE("Ampere register shadowing covers R2UR, uniform FMUL and FFMA, IMNMX a
     // LEA R217, R226, 0x8000.
     CheckShadowed({{0xe2d97811, 0x00008000, 0x078e80ff, 0}}, {{16, 1}, {24, 1}, {64, 1}});
 }
+
+TEST_CASE("Ampere register shadowing covers FMNMX and FADD without a register B, F2F and IDP",
+          "[video_core][ampere][pressure]") {
+    // The immediates end in 0xe8: their low byte is no register and must not be renamed.
+    for (const Instruction instruction : {
+             Instruction{{0xe2d97809, 0x3f8000e8, 0x07810000, 0}}, // FMNMX R217, R226, imm
+             Instruction{{0xe2d97a09, 0x00c00400, 0x07810000, 0}}, // FMNMX R217, R226, c[0x3][0x10]
+             Instruction{{0xe2d97c09, 0x00000004, 0x0f810000, 0}}, // FMNMX R217, R226, UR4
+             Instruction{{0xe2d97821, 0x3f8000e8, 0, 0}},          // FADD R217, R226, imm
+             Instruction{{0xe2d97a21, 0x00c00400, 0, 0}},          // FADD R217, R226, c[0x3][0x10]
+             Instruction{{0xe2d97e21, 0x00000004, 0x08000000, 0}}, // FADD R217, R226, UR4
+         }) {
+        CheckShadowed(instruction, {{16, 1}, {24, 1}});
+    }
+    // F2F.F16.F32 R225, R228.
+    CheckShadowed({{0x00e17304, 0xe4, 0x00200800, 0}}, {{16, 1}, {32, 1}});
+    // IDP.4A R225, R226, R232, R236.
+    CheckShadowed({{0xe2e17226, 0xe8, 0x000000ec, 0}}, {{16, 1}, {24, 1}, {32, 1}, {64, 1}});
+}
