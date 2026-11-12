@@ -16,6 +16,7 @@ add_executable(tests
     common/host_memory.cpp
     common/host_memory_fallback.cpp
     common/host_resources.cpp
+    common/multi_level_page_table.cpp
     common/page_table.cpp
     common/paged_scalar.cpp
     common/param_package.cpp
