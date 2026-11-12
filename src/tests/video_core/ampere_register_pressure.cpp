@@ -318,3 +318,29 @@ TEST_CASE("Ampere register shadowing covers TEX with a uniform handle",
     CheckSpan(volume, 32, 1);
     CheckSpan(With(volume, 87, 2, 3), 32, 2);
 }
+
+TEST_CASE("Ampere HSETP2 with a constant buffer compares through a scratch register",
+          "[video_core][ampere]") {
+    // HSETP2.GT.AND P1, PT, RZ.H0_H0, c[0x7][0xfc].H1_H1, !P1 (Hyrule Warriors).
+    constexpr Instruction compare{{0xff007634, 0x31c03f00, 0x04f24000, 0}};
+    const auto lowered = LowerToMaxwell(std::array{compare, Exit});
+    INFO(lowered.error);
+    REQUIRE(static_cast<bool>(lowered));
+    REQUIRE(lowered.instructions.size() == 3);
+    CHECK(lowered.instructions[0] == (0x4c98000000070000ULL | 250 | (u64{15} << 39) |
+                                      (u64{0xfc / 4} << 20) | (u64{7} << 34)));
+    // Maxwell HSETP2 register form: Q = PT, P = P1, Ra = RZ, Rb = R250.H1_H1, GT, !P1.
+    CHECK(lowered.instructions[1] ==
+          (0x5d20000000070000ULL | 7 | (u64{1} << 3) | (u64{255} << 8) | (u64{250} << 20) |
+           (u64{3} << 28) | (u64{4} << 35) | (u64{1} << 39) | (u64{1} << 42)));
+    // B's absolute (62) and negate (63) bits are those of the register form.
+    const auto modified = LowerToMaxwell(std::array{With(compare, 62, 3, 2), Exit});
+    REQUIRE(static_cast<bool>(modified));
+    CHECK(modified.instructions[1] == (lowered.instructions[1] | (u64{3} << 30)));
+    const auto unsupported = LowerToMaxwell(std::array{With(compare, 64, 1, 1), Exit});
+    REQUIRE_FALSE(static_cast<bool>(unsupported));
+    CHECK(unsupported.error == "native half comparison mode");
+    const auto bad_bank = LowerToMaxwell(std::array{With(compare, 54, 20, 5), Exit});
+    REQUIRE_FALSE(static_cast<bool>(bad_bank));
+    CHECK(bad_bank.error == "native constant buffer address");
+}
